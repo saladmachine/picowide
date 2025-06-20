@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picowide</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Picowide</h1>
+        <p>Raspberry Pi Pico 2 W Development Environment</p>
+        <button onclick="testButton()">Test Connection</button>
+        <button onclick="runBlinky()">Run Blinky</button>
+        <div id="result"></div>
+    </div>
+    <script>
+        async function testButton() {
+            try {
+                const response = await fetch('/test', { method: 'POST' });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        async function runBlinky() {
+            try {
+                const response = await fetch('/run-blinky', { method: 'POST' });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
