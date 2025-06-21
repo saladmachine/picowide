@@ -1,52 +1,337 @@
-import wifi 
-import socketpool
-import ipaddress
-from adafruit_httpserver import Server, Request, Response
+<!DOCTYPE html>
+<!--
+Picowide Web Interface - Main HTML File
 
-# Create hotspot
-wifi.radio.start_ap(ssid="Picowide")
-wifi.radio.set_ipv4_address_ap(
-    ipv4=ipaddress.IPv4Address("192.168.4.1"),
-    netmask=ipaddress.IPv4Address("255.255.255.0"), 
-    gateway=ipaddress.IPv4Address("192.168.4.1")
-)
+This file provides the complete web-based development environment interface
+for the Raspberry Pi Pico 2 W. It includes file management, editing capabilities,
+and system testing functions accessible through any web browser.
 
-# Start server
-pool = socketpool.SocketPool(wifi.radio)
-server = Server(pool, "/", debug=False)
+Features:
+- Responsive design for mobile and desktop devices
+- File browser with list, select, open, edit, save operations
+- Real-time file editing with syntax highlighting (monospace)
+- Connection testing and hardware interaction
+- Clean, modern UI following mobile-first design principles
 
-# Module management
-loaded_module = None
+Technical Notes:
+- Uses vanilla JavaScript (no external dependencies)
+- Communicates with Pico via HTTP POST requests
+- Form data handling for file operations
+- Dynamic DOM manipulation for file list display
 
-@server.route("/")
-def serve_index(request: Request):
-    with open("index.html", "r") as f:
-        return Response(request, f.read(), content_type="text/html")
+Author: Picowide Project
+Version: 1.09
+Compatible with: CircuitPython adafruit_httpserver
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picowide</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- ===== HEADER SECTION ===== -->
+        <h1>Picowide v1.09</h1>
+        <p>Raspberry Pi Pico 2 W Development Environment</p>
+        
+        <!-- ===== CORE FUNCTIONALITY BUTTONS ===== -->
+        <!-- These buttons provide basic system testing and hardware interaction -->
+        <button onclick="testButton()">Test Connection</button>
+        <button id="blinky-btn" onclick="runBlinky()">Blinky On</button>
+        
+        <!-- ===== FILE MANAGEMENT SECTION ===== -->
+        <!-- This section can be removed when creating stripped-down versions -->
+        <!-- All file management UI components are contained here -->
+        
+        <!-- File listing trigger -->
+        <button onclick="loadFileManager()">List Files</button>
+        
+        <!-- Results display area -->
+        <div id="result"></div>
+        
+        <!-- File operation button (shown when file is selected) -->
+        <button id="open-btn" style="display: none;" onclick="openSelectedFile()">Open</button>
+        
+        <!-- File list display container -->
+        <div id="file-list" class="file-list" style="display: none;">
+            <h3>Files:</h3>
+            <div id="files" class="files"></div>
+        </div>
+        
+        <!-- File editor interface -->
+        <div id="editor-section" style="display: none;">
+            <h3 id="editor-title">Editing: filename</h3>
+            <textarea id="file-editor" rows="20" cols="80" 
+                      style="width: 100%; font-family: monospace; font-size: 14px;"
+                      placeholder="File content will appear here..."></textarea>
+            <br>
+            <button onclick="saveFile()">Save</button>
+            <button onclick="closeEditor()">Close</button>
+        </div>
+        
+        <!-- END FILE MANAGEMENT SECTION -->
+    </div>
 
-@server.route("/styles.css")
-def serve_styles(request: Request):
-    with open("styles.css", "r") as f:
-        return Response(request, f.read(), content_type="text/css")
+    <script>
+        /**
+         * Picowide Web Interface JavaScript
+         * 
+         * This script handles all client-side functionality for the Picowide
+         * development environment, including HTTP communication with the Pico
+         * server and dynamic UI updates.
+         */
 
-@server.route("/test", methods=["POST"])
-def test_button(request: Request):
-    return Response(request, "Button works!", content_type="text/plain")
+        // =================================================================
+        // CORE FUNCTIONALITY (Always needed)
+        // =================================================================
 
-@server.route("/run-blinky", methods=["POST"])
-def run_blinky(request: Request):
-    global loaded_module
-    try:
-        loaded_module = __import__("pico_blinky")
-        return Response(request, "Blinky started!", content_type="text/plain")
-    except Exception as e:
-        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+        /**
+         * Test the connection to the Pico server.
+         * 
+         * Sends a POST request to the /test endpoint to verify that the
+         * server is responding correctly. Updates the result display with
+         * the server response or error message.
+         * 
+         * @async
+         * @function testButton
+         * @returns {Promise<void>}
+         */
+        async function testButton() {
+            try {
+                const response = await fetch('/test', { method: 'POST' });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        /**
+         * Toggle the LED blinky functionality on the Pico.
+         * 
+         * Sends a request to toggle the onboard LED blinking pattern and
+         * updates the button text to reflect the next available action.
+         * 
+         * @async
+         * @function runBlinky
+         * @returns {Promise<void>}
+         */
+        async function runBlinky() {
+            try {
+                const response = await fetch('/run-blinky', { method: 'POST' });
+                const result = await response.text();
+                
+                // Update button text with next action
+                document.getElementById('blinky-btn').textContent = result;
+                
+                // Clear result display since button shows the state
+                document.getElementById('result').textContent = '';
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
 
-server.start("192.168.4.1", port=80)
-print("Picowide ready at http://192.168.4.1")
+        // =================================================================
+        // FILE MANAGEMENT SECTION
+        // =================================================================
+        // This section can be removed when creating stripped-down versions
+        // All file management JavaScript functionality is contained here
 
-while True:
-    server.poll()
-    
-    # Update loaded module if present
-    if loaded_module and hasattr(loaded_module, 'update_blinky'):
-        loaded_module.update_blinky()
+        /**
+         * Load and display the file manager interface.
+         * 
+         * Requests a list of files from the Pico filesystem and displays them
+         * in a selectable list format. Parses the server response to extract
+         * individual filenames and creates clickable file rows.
+         * 
+         * @async
+         * @function loadFileManager
+         * @returns {Promise<void>}
+         * 
+         * Server Response Format Expected:
+         * ```
+         * Files found:
+         * 
+         * filename1.py
+         * filename2.html
+         * filename3.css
+         * ```
+         */
+        async function loadFileManager() {
+            try {
+                const response = await fetch('/list-files', { method: 'POST' });
+                const result = await response.text();
+                
+                // Parse the file list from the response
+                const lines = result.split('\n');
+                if (lines[0].includes('Files found:')) {
+                    // Extract just the filenames (skip the header and empty line)
+                    const files = lines.slice(2).filter(line => line.trim() !== '');
+                    
+                    // Clear previous results
+                    document.getElementById('result').textContent = '';
+                    
+                    // Show the file list box
+                    const fileListDiv = document.getElementById('file-list');
+                    const filesDiv = document.getElementById('files');
+                    
+                    // Clear previous files
+                    filesDiv.innerHTML = '';
+                    
+                    // Add each file as a clickable row
+                    files.forEach(filename => {
+                        const fileRow = document.createElement('div');
+                        fileRow.className = 'file-row';
+                        fileRow.textContent = filename;
+                        fileRow.onclick = () => selectFile(filename);
+                        filesDiv.appendChild(fileRow);
+                    });
+                    
+                    fileListDiv.style.display = 'block';
+                } else {
+                    // Handle case where no files found or error occurred
+                    document.getElementById('result').textContent = result;
+                    document.getElementById('file-list').style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+                document.getElementById('file-list').style.display = 'none';
+            }
+        }
+        
+        /**
+         * Handle file selection from the file list.
+         * 
+         * Sends the selected filename to the server and prepares the UI
+         * for file opening operations. Shows the "Open" button and stores
+         * the selected filename for subsequent operations.
+         * 
+         * @async
+         * @function selectFile
+         * @param {string} filename - Name of the selected file
+         * @returns {Promise<void>}
+         */
+        async function selectFile(filename) {
+            try {
+                const formData = new FormData();
+                formData.append('filename', filename);
+                
+                const response = await fetch('/select-file', { 
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+                
+                // Show the Open button and store the selected filename
+                document.getElementById('open-btn').style.display = 'inline-block';
+                document.getElementById('open-btn').setAttribute('data-filename', filename);
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        /**
+         * Open the selected file in the editor.
+         * 
+         * Retrieves the file content from the server and displays it in
+         * the text editor interface. Parses the server response to extract
+         * just the file content (excluding headers).
+         * 
+         * @async
+         * @function openSelectedFile
+         * @returns {Promise<void>}
+         * 
+         * Server Response Format Expected:
+         * ```
+         * File: filename.py
+         * 
+         * [actual file content here]
+         * ```
+         */
+        async function openSelectedFile() {
+            const filename = document.getElementById('open-btn').getAttribute('data-filename');
+            if (!filename) return;
+            
+            try {
+                const formData = new FormData();
+                formData.append('filename', filename);
+                
+                const response = await fetch('/open-file', { 
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.text();
+                
+                // Parse the response to get just the file content
+                const lines = result.split('\n');
+                const content = lines.slice(2).join('\n'); // Skip "File: filename" and empty line
+                
+                // Show in editor
+                document.getElementById('file-editor').value = content;
+                document.getElementById('editor-title').textContent = `Editing: ${filename}`;
+                document.getElementById('editor-section').style.display = 'block';
+                
+                // Clear result area and hide Open button
+                document.getElementById('result').textContent = `Opened ${filename} in editor`;
+                document.getElementById('open-btn').style.display = 'none';
+                
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        /**
+         * Save the current file content to the Pico filesystem.
+         * 
+         * Sends the editor content to the server for saving. Handles the
+         * form data transmission and provides feedback on save success or failure.
+         * 
+         * @async
+         * @function saveFile
+         * @returns {Promise<void>}
+         * 
+         * Note: Files saved via this interface may require a Pico restart
+         * to appear in the CIRCUITPY USB view due to filesystem sync timing.
+         */
+        async function saveFile() {
+            const filename = document.getElementById('editor-title').textContent.replace('Editing: ', '');
+            const content = document.getElementById('file-editor').value;
+            
+            try {
+                const formData = new FormData();
+                formData.append('filename', filename);
+                formData.append('content', content);
+                
+                const response = await fetch('/save-file', { 
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+                
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        /**
+         * Close the file editor interface.
+         * 
+         * Hides the editor section and returns to the main interface.
+         * Does not save any unsaved changes - user should save explicitly.
+         * 
+         * @function closeEditor
+         * @returns {void}
+         */
+        function closeEditor() {
+            document.getElementById('editor-section').style.display = 'none';
+            document.getElementById('result').textContent = 'Editor closed';
+        }
+
+        // END FILE MANAGEMENT SECTION
+    </script>
+</body>
+</html>
