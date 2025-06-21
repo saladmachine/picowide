@@ -12,6 +12,7 @@
         <p>Raspberry Pi Pico 2 W Development Environment</p>
         <button onclick="testButton()">Test Connection</button>
         <button onclick="runBlinky()">Run Blinky</button>
+        <button onclick="listFiles()">List Files</button>
         <div id="result"></div>
     </div>
     <script>
@@ -28,6 +29,16 @@
         async function runBlinky() {
             try {
                 const response = await fetch('/run-blinky', { method: 'POST' });
+                const result = await response.text();
+                document.getElementById('result').textContent = result;
+            } catch (error) {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        async function listFiles() {
+            try {
+                const response = await fetch('/list-files', { method: 'POST' });
                 const result = await response.text();
                 document.getElementById('result').textContent = result;
             } catch (error) {
