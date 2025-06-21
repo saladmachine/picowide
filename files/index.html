@@ -33,7 +33,7 @@ Compatible with: CircuitPython adafruit_httpserver
 <body>
     <div class="container">
         <!-- ===== HEADER SECTION ===== -->
-        <h1>Picowide v1.13</h1>
+        <h1>Picowide v1.14</h1>
         <p>Raspberry Pi Pico 2 W Development Environment</p>
         
         <!-- ===== CORE FUNCTIONALITY BUTTONS ===== -->
@@ -47,12 +47,22 @@ Compatible with: CircuitPython adafruit_httpserver
         
         <!-- File listing trigger -->
         <button onclick="loadFileManager()">List Files</button>
+        <button onclick="showCreateFile()">Create File</button>
         
         <!-- Results display area -->
         <div id="result"></div>
         
+        <!-- File creation form (hidden by default) -->
+        <div id="create-file-section" style="display: none;">
+            <h3>Create New File:</h3>
+            <input type="text" id="new-filename" placeholder="filename.py" style="width: 70%; padding: 8px; margin: 4px;">
+            <button onclick="createFile()">Create</button>
+            <button onclick="hideCreateFile()">Cancel</button>
+        </div>
+        
         <!-- File operation button (shown when file is selected) -->
         <button id="open-btn" style="display: none;" onclick="openSelectedFile()">Open</button>
+        <button id="delete-btn" style="display: none;" onclick="deleteSelectedFile()">Delete</button>
         
         <!-- File list display container -->
         <div id="file-list" class="file-list" style="display: none;">
@@ -75,263 +85,201 @@ Compatible with: CircuitPython adafruit_httpserver
     </div>
 
     <script>
-        /**
-         * Picowide Web Interface JavaScript
-         * 
-         * This script handles all client-side functionality for the Picowide
-         * development environment, including HTTP communication with the Pico
-         * server and dynamic UI updates.
-         */
-
-        // =================================================================
-        // CORE FUNCTIONALITY (Always needed)
-        // =================================================================
-
-        /**
-         * Test the connection to the Pico server.
-         * 
-         * Sends a POST request to the /test endpoint to verify that the
-         * server is responding correctly. Updates the result display with
-         * the server response or error message.
-         * 
-         * @async
-         * @function testButton
-         * @returns {Promise<void>}
-         */
-        async function testButton() {
-            try {
-                const response = await fetch('/test', { method: 'POST' });
-                const result = await response.text();
-                document.getElementById('result').textContent = result;
-            } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
-        }
-        
-        /**
-         * Toggle the LED blinky functionality on the Pico.
-         * 
-         * Sends a request to toggle the onboard LED blinking pattern and
-         * updates the button text to reflect the next available action.
-         * 
-         * @async
-         * @function runBlinky
-         * @returns {Promise<void>}
-         */
-        async function runBlinky() {
-            try {
-                const response = await fetch('/run-blinky', { method: 'POST' });
-                const result = await response.text();
-                
-                // Update button text with next action
-                document.getElementById('blinky-btn').textContent = result;
-                
-                // Clear result display since button shows the state
-                document.getElementById('result').textContent = '';
-            } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
-        }
-
-        // =================================================================
-        // FILE MANAGEMENT SECTION
-        // =================================================================
-        // This section can be removed when creating stripped-down versions
-        // All file management JavaScript functionality is contained here
-
-        /**
-         * Load and display the file manager interface.
-         * 
-         * Requests a list of files from the Pico filesystem and displays them
-         * in a selectable list format. Parses the server response to extract
-         * individual filenames and creates clickable file rows.
-         * 
-         * @async
-         * @function loadFileManager
-         * @returns {Promise<void>}
-         * 
-         * Server Response Format Expected:
-         * ```
-         * Files found:
-         * 
-         * filename1.py
-         * filename2.html
-         * filename3.css
-         * ```
-         */
-        async function loadFileManager() {
-            try {
-                const response = await fetch('/list-files', { method: 'POST' });
-                const result = await response.text();
-                
-                // Parse the file list from the response
-                const lines = result.split('\n');
-                if (lines[0].includes('Files found:')) {
-                    // Extract just the filenames (skip the header and empty line)
-                    const files = lines.slice(2).filter(line => line.trim() !== '');
-                    
-                    // Clear previous results
-                    document.getElementById('result').textContent = '';
-                    
-                    // Show the file list box
-                    const fileListDiv = document.getElementById('file-list');
-                    const filesDiv = document.getElementById('files');
-                    
-                    // Clear previous files
-                    filesDiv.innerHTML = '';
-                    
-                    // Add each file as a clickable row
-                    files.forEach(filename => {
-                        const fileRow = document.createElement('div');
-                        fileRow.className = 'file-row';
-                        fileRow.textContent = filename;
-                        fileRow.onclick = () => selectFile(filename);
-                        filesDiv.appendChild(fileRow);
-                    });
-                    
-                    fileListDiv.style.display = 'block';
-                } else {
-                    // Handle case where no files found or error occurred
+        function testButton() {
+            fetch('/test', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
                     document.getElementById('result').textContent = result;
-                    document.getElementById('file-list').style.display = 'none';
-                }
-            } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-                document.getElementById('file-list').style.display = 'none';
-            }
-        }
-        
-        /**
-         * Handle file selection from the file list.
-         * 
-         * Sends the selected filename to the server and prepares the UI
-         * for file opening operations. Shows the "Open" button and stores
-         * the selected filename for subsequent operations.
-         * 
-         * @async
-         * @function selectFile
-         * @param {string} filename - Name of the selected file
-         * @returns {Promise<void>}
-         */
-        async function selectFile(filename) {
-            try {
-                const formData = new FormData();
-                formData.append('filename', filename);
-                
-                const response = await fetch('/select-file', { 
-                    method: 'POST',
-                    body: formData
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
                 });
-                const result = await response.text();
-                document.getElementById('result').textContent = result;
-                
-                // Show the Open button and store the selected filename
-                document.getElementById('open-btn').style.display = 'inline-block';
-                document.getElementById('open-btn').setAttribute('data-filename', filename);
-            } catch (error) {
-                document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
         }
         
-        /**
-         * Open the selected file in the editor.
-         * 
-         * Retrieves the file content from the server and displays it in
-         * the text editor interface. Parses the server response to extract
-         * just the file content (excluding headers).
-         * 
-         * @async
-         * @function openSelectedFile
-         * @returns {Promise<void>}
-         * 
-         * Server Response Format Expected:
-         * ```
-         * File: filename.py
-         * 
-         * [actual file content here]
-         * ```
-         */
-        async function openSelectedFile() {
+        function runBlinky() {
+            fetch('/run-blinky', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('blinky-btn').textContent = result;
+                    document.getElementById('result').textContent = '';
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+
+        function loadFileManager() {
+            fetch('/list-files', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    const lines = result.split('\n');
+                    if (lines[0].includes('Files found:')) {
+                        const files = lines.slice(2).filter(line => line.trim() !== '');
+                        document.getElementById('result').textContent = '';
+                        const fileListDiv = document.getElementById('file-list');
+                        const filesDiv = document.getElementById('files');
+                        filesDiv.innerHTML = '';
+                        files.forEach(filename => {
+                            const fileRow = document.createElement('div');
+                            fileRow.className = 'file-row';
+                            fileRow.textContent = filename;
+                            fileRow.onclick = () => selectFile(filename);
+                            filesDiv.appendChild(fileRow);
+                        });
+                        fileListDiv.style.display = 'block';
+                    } else {
+                        document.getElementById('result').textContent = result;
+                        document.getElementById('file-list').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                    document.getElementById('file-list').style.display = 'none';
+                });
+        }
+        
+        function selectFile(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/select-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                document.getElementById('open-btn').style.display = 'inline-block';
+                document.getElementById('delete-btn').style.display = 'inline-block';
+                document.getElementById('open-btn').setAttribute('data-filename', filename);
+                document.getElementById('delete-btn').setAttribute('data-filename', filename);
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function openSelectedFile() {
             const filename = document.getElementById('open-btn').getAttribute('data-filename');
             if (!filename) return;
             
-            try {
-                const formData = new FormData();
-                formData.append('filename', filename);
-                
-                const response = await fetch('/open-file', { 
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.text();
-                
-                // Parse the response to get just the file content
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/open-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
                 const lines = result.split('\n');
-                const content = lines.slice(2).join('\n'); // Skip "File: filename" and empty line
-                
-                // Show in editor
+                const content = lines.slice(2).join('\n');
                 document.getElementById('file-editor').value = content;
                 document.getElementById('editor-title').textContent = `Editing: ${filename}`;
                 document.getElementById('editor-section').style.display = 'block';
-                
-                // Clear result area and hide Open button
                 document.getElementById('result').textContent = `Opened ${filename} in editor`;
                 document.getElementById('open-btn').style.display = 'none';
-                
-            } catch (error) {
+                document.getElementById('delete-btn').style.display = 'none';
+            })
+            .catch(error => {
                 document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
+            });
         }
         
-        /**
-         * Save the current file content to the Pico filesystem.
-         * 
-         * Sends the editor content to the server for saving. Handles the
-         * form data transmission and provides feedback on save success or failure.
-         * 
-         * @async
-         * @function saveFile
-         * @returns {Promise<void>}
-         * 
-         * Note: Files saved via this interface may require a Pico restart
-         * to appear in the CIRCUITPY USB view due to filesystem sync timing.
-         */
-        async function saveFile() {
+        function saveFile() {
             const filename = document.getElementById('editor-title').textContent.replace('Editing: ', '');
             const content = document.getElementById('file-editor').value;
             
-            try {
-                const formData = new FormData();
-                formData.append('filename', filename);
-                formData.append('content', content);
-                
-                const response = await fetch('/save-file', { 
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.text();
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('content', content);
+            
+            fetch('/save-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
                 document.getElementById('result').textContent = result;
-                
-            } catch (error) {
+            })
+            .catch(error => {
                 document.getElementById('result').textContent = 'Error: ' + error.message;
-            }
+            });
         }
         
-        /**
-         * Close the file editor interface.
-         * 
-         * Hides the editor section and returns to the main interface.
-         * Does not save any unsaved changes - user should save explicitly.
-         * 
-         * @function closeEditor
-         * @returns {void}
-         */
         function closeEditor() {
             document.getElementById('editor-section').style.display = 'none';
             document.getElementById('result').textContent = 'Editor closed';
         }
 
-        // END FILE MANAGEMENT SECTION
+        function deleteSelectedFile() {
+            const filename = document.getElementById('delete-btn').getAttribute('data-filename');
+            if (!filename) return;
+            
+            if (!confirm(`Are you sure you want to delete '${filename}'?`)) {
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/delete-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('deleted successfully')) {
+                    document.getElementById('open-btn').style.display = 'none';
+                    document.getElementById('delete-btn').style.display = 'none';
+                    loadFileManager();
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // ADD CREATE FILE FUNCTIONS USING EXACT SAME PATTERN AS WORKING BUTTONS
+        function showCreateFile() {
+            document.getElementById('create-file-section').style.display = 'block';
+            document.getElementById('new-filename').focus();
+            document.getElementById('result').textContent = '';
+        }
+
+        function hideCreateFile() {
+            document.getElementById('create-file-section').style.display = 'none';
+            document.getElementById('new-filename').value = '';
+        }
+
+        function createFile() {
+            const filename = document.getElementById('new-filename').value.trim();
+            
+            if (!filename) {
+                document.getElementById('result').textContent = 'Please enter a filename';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/create-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('created successfully')) {
+                    hideCreateFile();
+                    loadFileManager();
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
     </script>
 </body>
 </html>

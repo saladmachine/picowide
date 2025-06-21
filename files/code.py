@@ -1,4 +1,4 @@
-""" a
+"""
 Picowide - Raspberry Pi Pico 2 W Web-based Development Environment
 
 This module creates a WiFi hotspot and serves a web-based file editor interface
@@ -140,18 +140,17 @@ def run_blinky(request: Request):
     Handle LED blinky functionality toggle.
     
     This route toggles the LED blinking pattern on/off when called from
-    the web interface. The actual blinking is handled by update_blinky()
-    in the main loop.
+    the web interface. Returns the next action text for the button.
     
     :param Request request: The HTTP request object
-    :return: Status message indicating current blinky state
+    :return: Next button action text ("Blinky On" or "Blinky Off")
     :rtype: Response
     """
     global blinky_enabled
     try:
         blinky_enabled = not blinky_enabled
-        status = "ON" if blinky_enabled else "OFF"
-        return Response(request, f"Blinky {status}", content_type="text/plain")
+        next_action = "Blinky Off" if blinky_enabled else "Blinky On"
+        return Response(request, next_action, content_type="text/plain")
     except Exception as e:
         return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
@@ -304,29 +303,54 @@ def open_file(request: Request):
         print(f"Error in open_file: {e}")
         return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
-@server.route("/save-file", methods=["POST"])
-def save_file(request: Request):
+@server.route("/create-file", methods=["POST"])
+def create_file(request: Request):
     """
-    Handle file saving requests from the editor.
+    Handle file creation requests.
     
-    This route receives file content from the web editor and writes it
-    to the specified file on the filesystem. It provides comprehensive
-    error handling for filesystem operations.
+    This route creates a new empty file with the specified name on the
+    filesystem. It checks for existing files to prevent overwriting.
     
     :param Request request: The HTTP request object containing form data
     :return: Success confirmation or error message
     :rtype: Response
     
     Form Data Expected:
-        - filename: Name of the file to save
-        - content: Content to write to the file
-        
-    Note:
-        Files saved via this interface may require a Pico restart to
-        appear in the CIRCUITPY USB view due to filesystem sync timing.
+        - filename: Name of the new file to create
     """
     try:
-        # Get the filename and content from form data
+        filename = request.form_data.get('filename', '')
+        
+        if not filename:
+            return Response(request, "No filename specified", content_type="text/plain")
+        
+        # Check if file already exists
+        try:
+            with open(filename, 'r'):
+                return Response(request, f"Error: File '{filename}' already exists", content_type="text/plain")
+        except OSError:
+            # File doesn't exist, create it
+            try:
+                with open(filename, 'w') as f:
+                    f.write('')  # Create empty file
+                return Response(request, f"File '{filename}' created successfully!", content_type="text/plain")
+            except OSError as e:
+                return Response(request, f"Error: Could not create file '{filename}' - {str(e)}", content_type="text/plain")
+                
+    except Exception as e:
+        print(f"Error in create_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/save-file", methods=["POST"])
+def save_file(request: Request):
+    """
+    Handle file saving requests from the editor.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Success confirmation or error message
+    :rtype: Response
+    """
+    try:
         filename = request.form_data.get('filename', '')
         content = request.form_data.get('content', '')
         
@@ -341,6 +365,31 @@ def save_file(request: Request):
             return Response(request, "No filename specified for saving", content_type="text/plain")
     except Exception as e:
         print(f"Error in save_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/delete-file", methods=["POST"])
+def delete_file(request: Request):
+    """
+    Handle file deletion requests.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Success confirmation or error message
+    :rtype: Response
+    """
+    try:
+        filename = request.form_data.get('filename', '')
+        
+        if not filename:
+            return Response(request, "No filename specified", content_type="text/plain")
+        
+        try:
+            os.remove(filename)
+            return Response(request, f"File '{filename}' deleted successfully!", content_type="text/plain")
+        except OSError as e:
+            return Response(request, f"Error: Could not delete file '{filename}' - {str(e)}", content_type="text/plain")
+            
+    except Exception as e:
+        print(f"Error in delete_file: {e}")
         return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
 # =============================================================================
