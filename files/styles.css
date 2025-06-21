@@ -1,83 +1,195 @@
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
+"""
+Picowide Secrets Configuration
 
-body {
-    font-family: Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.5;
-    color: #333;
-    background-color: #f5f5f5;
-    padding: 16px;
-}
+This module contains sensitive configuration data for the Picowide development
+environment. It stores WiFi credentials and other sensitive parameters that
+should not be committed to version control.
 
-.container {
-    max-width: 600px;
-    margin: 0 auto;
-    background-color: white;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    text-align: center;
-}
+Security Notes:
+    - This file contains sensitive information
+    - Should NOT be committed to Git or shared publicly
+    - Add 'secrets.py' to your .gitignore file
+    - Consider using environment-specific copies
 
-h1 {
-    font-size: 24px;
-    margin-bottom: 8px;
-    color: #2563eb;
-}
+Usage:
+    The secrets dictionary is imported by the main application to access
+    configuration values safely. All sensitive data should be stored here
+    rather than hardcoded in the main application files.
 
-p {
-    margin-bottom: 24px;
-    color: #666;
-}
+Structure:
+    The secrets dictionary contains key-value pairs for configuration:
+    - 'ssid': WiFi network name for station mode (if implemented)
+    - 'password': WiFi password for station mode (if implemented)
+    - Additional keys can be added for API keys, tokens, etc.
 
-button {
-    background-color: #2563eb;
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    font-size: 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    min-height: 44px;
-}
+Author: Picowide Project
+Version: 1.09
+License: MIT
 
-button:hover {
-    background-color: #1d4ed8;
-}
+Example:
+    >>> from secrets import secrets
+    >>> wifi_name = secrets['ssid']
+    >>> wifi_pass = secrets['password']
+"""
 
-#result {
-    margin-top: 16px;
-    font-weight: bold;
-}
+# =============================================================================
+# NETWORK CONFIGURATION
+# =============================================================================
 
-@media (max-width: 480px) {
-    body {
-        padding: 8px;
-    }
+secrets = {
+    # WiFi Station Mode Credentials
+    # These credentials are used when the Pico connects to an existing WiFi network
+    # instead of creating its own hotspot. Currently unused in hotspot mode.
+    'ssid': 'ATTKesF7i2',
+    'password': 'n68vhicgeq8e',
     
-    .container {
-        padding: 16px;
-    }
+    # ==========================================================================
+    # ADDITIONAL CONFIGURATION OPTIONS
+    # ==========================================================================
+    # Add additional sensitive configuration here as needed:
     
-    h1 {
-        font-size: 20px;
-    }
+    # API Keys (examples - add as needed)
+    # 'openweather_api_key': 'your_api_key_here',
+    # 'mqtt_broker_password': 'your_mqtt_password',
     
-    button {
-        width: 100%;
-    }
+    # Device-specific settings
+    # 'device_id': 'picowide_001',
+    # 'admin_password': 'your_admin_password',
+    
+    # Cloud service credentials
+    # 'aws_access_key': 'your_aws_key',
+    # 'azure_connection_string': 'your_azure_string',
 }
 
-@media (min-width: 768px) {
-    .container {
-        padding: 32px;
-    }
+# =============================================================================
+# CONFIGURATION VALIDATION
+# =============================================================================
+
+def validate_secrets():
+    """
+    Validate that all required secret values are present and properly formatted.
     
-    h1 {
-        font-size: 28px;
-    }
-}
+    This function checks that essential configuration values exist and meet
+    basic formatting requirements. It should be called during application
+    startup to catch configuration errors early.
+    
+    :raises ValueError: If required secrets are missing or invalid
+    :return: True if all secrets are valid
+    :rtype: bool
+    
+    Example:
+        >>> validate_secrets()
+        True
+    """
+    required_keys = ['ssid', 'password']
+    
+    for key in required_keys:
+        if key not in secrets:
+            raise ValueError(f"Missing required secret: {key}")
+        
+        if not isinstance(secrets[key], str):
+            raise ValueError(f"Secret '{key}' must be a string")
+        
+        if len(secrets[key]) == 0:
+            raise ValueError(f"Secret '{key}' cannot be empty")
+    
+    # Validate WiFi SSID length (IEEE 802.11 standard)
+    if len(secrets['ssid']) > 32:
+        raise ValueError("WiFi SSID cannot exceed 32 characters")
+    
+    # Validate WiFi password length (WPA/WPA2 requirements)
+    if len(secrets['password']) < 8:
+        raise ValueError("WiFi password must be at least 8 characters")
+    
+    return True
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def get_secret(key, default=None):
+    """
+    Safely retrieve a secret value with optional default.
+    
+    This function provides a safe way to access secret values with fallback
+    to default values if the key doesn't exist. Useful for optional
+    configuration parameters.
+    
+    :param str key: The secret key to retrieve
+    :param default: Default value if key doesn't exist (default: None)
+    :return: Secret value or default
+    :raises TypeError: If key is not a string
+    
+    Example:
+        >>> api_key = get_secret('api_key', 'default_key')
+        >>> device_id = get_secret('device_id', 'unknown_device')
+    """
+    if not isinstance(key, str):
+        raise TypeError("Secret key must be a string")
+    
+    return secrets.get(key, default)
+
+def list_available_secrets():
+    """
+    Get a list of available secret keys (for debugging purposes).
+    
+    Returns a list of all available secret keys without exposing the
+    actual secret values. Useful for debugging configuration issues.
+    
+    :return: List of available secret keys
+    :rtype: list[str]
+    
+    Example:
+        >>> keys = list_available_secrets()
+        >>> print(f"Available secrets: {keys}")
+        Available secrets: ['ssid', 'password']
+    """
+    return list(secrets.keys())
+
+# =============================================================================
+# SECURITY UTILITIES
+# =============================================================================
+
+def mask_secret(secret_value, visible_chars=2):
+    """
+    Create a masked version of a secret for safe logging.
+    
+    This function creates a masked version of sensitive data that can be
+    safely logged or displayed for debugging purposes without exposing
+    the actual secret value.
+    
+    :param str secret_value: The secret value to mask
+    :param int visible_chars: Number of characters to show at start/end
+    :return: Masked version of the secret
+    :rtype: str
+    
+    Example:
+        >>> masked = mask_secret("my_secret_password", 2)
+        >>> print(masked)
+        my************rd
+    """
+    if not isinstance(secret_value, str):
+        return "***INVALID_SECRET_TYPE***"
+    
+    if len(secret_value) <= visible_chars * 2:
+        return "*" * len(secret_value)
+    
+    start = secret_value[:visible_chars]
+    end = secret_value[-visible_chars:]
+    middle = "*" * (len(secret_value) - visible_chars * 2)
+    
+    return f"{start}{middle}{end}"
+
+# =============================================================================
+# MODULE INITIALIZATION
+# =============================================================================
+
+# Automatically validate secrets when module is imported
+# This ensures configuration errors are caught early
+try:
+    validate_secrets()
+    print("Secrets configuration validated successfully")
+except ValueError as e:
+    print(f"Secrets configuration error: {e}")
+    # In production, you might want to raise the exception instead of just printing
+    # raise
