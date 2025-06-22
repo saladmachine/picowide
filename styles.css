@@ -1,0 +1,418 @@
+/**
+ * Picowide Web Interface Stylesheet
+ * 
+ * This CSS file provides responsive styling for the Picowide development
+ * environment web interface. It follows mobile-first design principles
+ * and ensures accessibility across different device types.
+ * 
+ * Design Philosophy:
+ * - Mobile-first responsive design
+ * - High contrast for readability
+ * - Touch-friendly button sizes (44px minimum)
+ * - Clean, modern aesthetic
+ * - Accessibility considerations
+ * 
+ * Browser Support:
+ * - Modern browsers with CSS3 support
+ * - Mobile browsers (iOS Safari, Chrome Mobile)
+ * - Desktop browsers (Chrome, Firefox, Safari, Edge)
+ * 
+ * Author: Picowide Project
+ * Version: 1.09
+ * License: MIT
+ */
+
+/* =============================================================================
+   GLOBAL RESET AND BASE STYLES
+   ============================================================================= */
+
+/**
+ * Universal box-sizing and reset
+ * Ensures consistent sizing across all elements
+ */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/**
+ * Base body styling
+ * Sets up the foundation for the entire interface
+ */
+body {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+    background-color: #f5f5f5;
+    padding: 16px;
+}
+
+/* =============================================================================
+   MAIN CONTAINER AND LAYOUT
+   ============================================================================= */
+
+/**
+ * Main container for the application
+ * Centers content and provides card-like appearance
+ */
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+/* =============================================================================
+   TYPOGRAPHY
+   ============================================================================= */
+
+/**
+ * Main heading styling
+ * Uses brand color and appropriate sizing
+ */
+h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: #2563eb;
+}
+
+/**
+ * Subtitle and general paragraph styling
+ */
+p {
+    margin-bottom: 24px;
+    color: #666;
+}
+
+/* =============================================================================
+   BUTTON STYLES (Core UI - always needed)
+   ============================================================================= */
+
+/**
+ * Primary button styling
+ * Follows accessibility guidelines with 44px minimum touch target
+ */
+button {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 44px;
+    margin: 4px;
+    transition: background-color 0.2s ease;
+}
+
+/**
+ * Button hover state
+ * Provides visual feedback for interactive elements
+ */
+button:hover {
+    background-color: #1d4ed8;
+}
+
+/**
+ * Button focus state for accessibility
+ * Ensures keyboard navigation visibility
+ */
+button:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* =============================================================================
+   RESULT DISPLAY AREA
+   ============================================================================= */
+
+/**
+ * Results display styling
+ * Shows server responses and status messages
+ */
+#result {
+    margin-top: 16px;
+    font-weight: bold;
+    min-height: 24px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #f9fafb;
+}
+
+/* =============================================================================
+   FILE MANAGEMENT SECTION
+   ============================================================================= */
+/* This section can be removed when creating stripped-down versions */
+/* All file management styling is contained here */
+
+/**
+ * File list container
+ * Provides structure for file browsing interface
+ */
+.file-list {
+    margin-top: 20px;
+    text-align: left;
+}
+
+/**
+ * File list heading
+ */
+.file-list h3 {
+    margin-bottom: 10px;
+    color: #2563eb;
+    text-align: center;
+}
+
+/**
+ * Files container with scrollable area
+ * Handles overflow when many files are present
+ */
+.files {
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #f9fafb;
+}
+
+/**
+ * Individual file row styling
+ * Provides hover effects and touch-friendly sizing
+ */
+.file-row {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+
+/**
+ * Remove border from last file row
+ */
+.file-row:last-child {
+    border-bottom: none;
+}
+
+/**
+ * File row hover state
+ */
+.file-row:hover {
+    background-color: #e5e7eb;
+}
+
+/**
+ * File row focus state for accessibility
+ */
+.file-row:focus {
+    background-color: #e5e7eb;
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+}
+
+/**
+ * File editor section
+ * Hidden by default, shown when editing files
+ */
+#editor-section {
+    margin-top: 20px;
+    text-align: left;
+}
+
+/**
+ * File creation section
+ * Hidden by default, shown when creating new files
+ */
+#create-file-section {
+    margin-top: 20px;
+    padding: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    background-color: #f9fafb;
+}
+
+#create-file-section h3 {
+    margin-bottom: 10px;
+    color: #2563eb;
+    text-align: center;
+}
+
+#create-file-section input {
+    border: 2px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+#create-file-section input:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+/**
+ * Editor title styling
+ */
+#editor-title {
+    margin-bottom: 10px;
+    color: #2563eb;
+    font-size: 18px;
+}
+
+/**
+ * File editor textarea
+ * Monospace font for code editing
+ */
+#file-editor {
+    width: 100%;
+    min-height: 300px;
+    font-family: 'Courier New', Consolas, Monaco, monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    resize: vertical;
+    background-color: #fafafa;
+}
+
+/**
+ * Editor textarea focus state
+ */
+#file-editor:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* END FILE MANAGEMENT SECTION */
+
+/* =============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================= */
+
+/**
+ * Mobile-specific adjustments
+ * Optimizes interface for small screens
+ */
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+    }
+    
+    .container {
+        padding: 16px;
+    }
+    
+    h1 {
+        font-size: 20px;
+    }
+    
+    /**
+     * Full-width buttons on mobile
+     * Ensures easy touch interaction
+     */
+    button {
+        width: 100%;
+        margin: 2px 0;
+    }
+    
+    /**
+     * Adjust file editor for mobile
+     */
+    #file-editor {
+        font-size: 12px;
+        min-height: 250px;
+    }
+}
+
+/**
+ * Tablet and desktop enhancements
+ * Provides more spacious layout for larger screens
+ */
+@media (min-width: 768px) {
+    .container {
+        padding: 32px;
+    }
+    
+    h1 {
+        font-size: 28px;
+    }
+    
+    /**
+     * Larger editor on desktop
+     */
+    #file-editor {
+        min-height: 400px;
+        font-size: 14px;
+    }
+}
+
+/**
+ * Large desktop optimizations
+ */
+@media (min-width: 1024px) {
+    .container {
+        max-width: 800px;
+    }
+    
+    #file-editor {
+        min-height: 500px;
+    }
+}
+
+/* =============================================================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================================================= */
+
+/**
+ * High contrast mode support
+ */
+@media (prefers-contrast: high) {
+    button {
+        border: 2px solid #000;
+    }
+    
+    .file-row {
+        border-bottom-color: #000;
+    }
+    
+    #file-editor {
+        border-color: #000;
+    }
+}
+
+/**
+ * Reduced motion support
+ */
+@media (prefers-reduced-motion: reduce) {
+    button,
+    .file-row {
+        transition: none;
+    }
+}
+
+/**
+ * Print styles
+ * Ensures reasonable appearance if printed
+ */
+@media print {
+    body {
+        background-color: white;
+        color: black;
+    }
+    
+    .container {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+    
+    button {
+        display: none;
+    }
+}

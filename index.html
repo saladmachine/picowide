@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<!--
+Picowide Web Interface - Main HTML File
+
+This file provides the complete web-based development environment interface
+for the Raspberry Pi Pico 2 W. It includes file management, editing capabilities,
+and system testing functions accessible through any web browser.
+
+Features:
+- Responsive design for mobile and desktop devices
+- File browser with list, select, open, edit, save operations
+- Real-time file editing with syntax highlighting (monospace)
+- Connection testing and hardware interaction
+- Clean, modern UI following mobile-first design principles
+
+Technical Notes:
+- Uses vanilla JavaScript (no external dependencies)
+- Communicates with Pico via HTTP POST requests
+- Form data handling for file operations
+- Dynamic DOM manipulation for file list display
+
+Author: Picowide Project
+Version: 1.00 (Modified for FOSS release)
+Compatible with: CircuitPython adafruit_httpserver
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picowide v1.0</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Custom Modal Styling */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-content button {
+            margin: 10px;
+            min-width: 100px; /* Ensure buttons are decently sized */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ===== HEADER SECTION ===== -->
+        <h1>Picowide v1.0 (FOSS Edition)</h1>
+        <p>Raspberry Pi Pico 2 W Development Environment</p>
+        
+        <!-- ===== CORE FUNCTIONALITY BUTTONS ===== -->
+        <!-- These buttons provide basic system testing and hardware interaction -->
+        <button onclick="testButton()">Test Connection</button>
+        <button id="blinky-btn" onclick="runBlinky()">Blinky On</button>
+        <button id="monitor-btn" onclick="runMonitor()">Monitor On</button>
+        
+        <!-- ===== FILE MANAGEMENT SECTION ===== -->
+        <!-- This section provides a web-based file manager and editor -->
+        
+        <!-- File listing trigger -->
+        <button onclick="loadFileManager()">List Files</button>
+        <button onclick="showCreateFile()">Create File</button>
+        
+        <!-- Results display area -->
+        <div id="result"></div>
+        
+        <!-- File creation form (hidden by default) -->
+        <div id="create-file-section" style="display: none;">
+            <h3>Create New File:</h3>
+            <input type="text" id="new-filename" placeholder="filename.py" style="width: 70%; padding: 8px; margin: 4px;">
+            <button onclick="createFile()">Create</button>
+            <button onclick="hideCreateFile()">Cancel</button>
+        </div>
+
+        <!-- Console Monitor window (hidden by default) -->
+        <div id="monitor-section" style="display: none;">
+            <h3>Console Monitor</h3>
+            <div id="console-output" style="width: 100%; height: 300px; background-color: #fff; color: #000; font-family: monospace; font-size: 12px; padding: 10px; overflow-y: auto; border: 2px solid #333; text-align: left;"></div>
+            <button onclick="clearMonitor()">Clear Monitor</button>
+        </div>
+        
+        <!-- File operation button (shown when file is selected) -->
+        <button id="open-btn" style="display: none;" onclick="openSelectedFile()">Open</button>
+        <button id="delete-btn" style="display: none;" onclick="showDeleteConfirm()">Delete</button>
+        
+        <!-- File list display container -->
+        <div id="file-list" class="file-list" style="display: none;">
+            <h3>Files:</h3>
+            <div id="files" class="files"></div>
+        </div>
+        
+        <!-- File editor interface -->
+        <div id="editor-section" style="display: none;">
+            <h3 id="editor-title">Editing: filename</h3>
+            <textarea id="file-editor" rows="20" cols="80"
+                      style="width: 100%; font-family: monospace; font-size: 14px;"
+                      placeholder="File content will appear here..."></textarea>
+            <br>
+            <button onclick="saveFile()">Save</button>
+            <button onclick="closeEditor()">Close</button>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="confirm-message"></h3>
+            <button id="confirmYes" onclick="confirmAction(true)">Yes</button>
+            <button id="confirmNo" onclick="confirmAction(false)">No</button>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for modal handling
+        let currentConfirmAction = null;
+        let currentConfirmFilename = '';
+
+        function showCustomConfirm(message, callback, filename) {
+            document.getElementById('confirmModal').style.display = 'block';
+            document.getElementById('confirm-message').textContent = message;
+            currentConfirmAction = callback;
+            currentConfirmFilename = filename;
+        }
+
+        function confirmAction(isConfirmed) {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (currentConfirmAction) {
+                currentConfirmAction(isConfirmed, currentConfirmFilename);
+            }
+            currentConfirmAction = null;
+            currentConfirmFilename = '';
+        }
+
+        function testButton() {
+            fetch('/test', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('result').textContent = result;
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+        
+        function runBlinky() {
+            fetch('/run-blinky', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('blinky-btn').textContent = result;
+                    document.getElementById('result').textContent = '';
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+
+        function runMonitor() {
+            fetch('/run-monitor', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('monitor-btn').textContent = result;
+                    if (result === 'Monitor Off') {
+                        document.getElementById('monitor-section').style.display = 'block';
+                        startMonitoring();
+                    } else {
+                        document.getElementById('monitor-section').style.display = 'none';
+                        stopMonitoring();
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+
+        let monitorInterval;
+
+        function startMonitoring() {
+            monitorInterval = setInterval(() => {
+                fetch('/get-console', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(result => {
+                        if (result.trim()) {
+                            const consoleDiv = document.getElementById('console-output');
+                            consoleDiv.innerHTML += result + '<br>';
+                            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+                        }
+                    })
+                    .catch(error => {
+                        console.log('Monitor fetch error:', error);
+                    });
+            }, 500);
+        }
+
+        function stopMonitoring() {
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+        }
+
+        function clearMonitor() {
+            document.getElementById('console-output').innerHTML = '';
+        }
+
+        function loadFileManager() {
+            fetch('/list-files', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    const lines = result.split('\n');
+                    if (lines[0].includes('Files found:')) {
+                        const files = lines.slice(2).filter(line => line.trim() !== '');
+                        document.getElementById('result').textContent = '';
+                        const fileListDiv = document.getElementById('file-list');
+                        const filesDiv = document.getElementById('files');
+                        filesDiv.innerHTML = '';
+                        files.forEach(filename => {
+                            const fileRow = document.createElement('div');
+                            fileRow.className = 'file-row';
+                            fileRow.textContent = filename;
+                            fileRow.onclick = () => selectFile(filename);
+                            filesDiv.appendChild(fileRow);
+                        });
+                        fileListDiv.style.display = 'block';
+                    } else {
+                        document.getElementById('result').textContent = result;
+                        document.getElementById('file-list').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                    document.getElementById('file-list').style.display = 'none';
+                });
+        }
+        
+        function selectFile(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/select-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                document.getElementById('open-btn').style.display = 'inline-block';
+                document.getElementById('delete-btn').style.display = 'inline-block';
+                document.getElementById('open-btn').setAttribute('data-filename', filename);
+                document.getElementById('delete-btn').setAttribute('data-filename', filename);
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function openSelectedFile() {
+            const filename = document.getElementById('open-btn').getAttribute('data-filename');
+            if (!filename) return;
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/open-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                const lines = result.split('\n');
+                const content = lines.slice(2).join('\n');
+                document.getElementById('file-editor').value = content;
+                document.getElementById('editor-title').textContent = `Editing: ${filename}`;
+                document.getElementById('editor-section').style.display = 'block';
+                document.getElementById('result').textContent = `Opened ${filename} in editor`;
+                document.getElementById('open-btn').style.display = 'none';
+                document.getElementById('delete-btn').style.display = 'none';
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function saveFile() {
+            const filename = document.getElementById('editor-title').textContent.replace('Editing: ', '');
+            const content = document.getElementById('file-editor').value;
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('content', content);
+            
+            fetch('/save-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function closeEditor() {
+            document.getElementById('editor-section').style.display = 'none';
+            document.getElementById('result').textContent = 'Editor closed';
+        }
+
+        // New function to show custom delete confirmation
+        function showDeleteConfirm() {
+            const filename = document.getElementById('delete-btn').getAttribute('data-filename');
+            if (!filename) return;
+            showCustomConfirm(`Are you sure you want to delete '${filename}'?`, (confirmed, fileToDelete) => {
+                if (confirmed) {
+                    deleteSelectedFileConfirmed(fileToDelete);
+                } else {
+                    document.getElementById('result').textContent = 'Deletion cancelled.';
+                }
+            }, filename);
+        }
+        
+        // Modified delete function to be called after confirmation
+        function deleteSelectedFileConfirmed(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/delete-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('deleted successfully')) {
+                    document.getElementById('open-btn').style.display = 'none';
+                    document.getElementById('delete-btn').style.display = 'none';
+                    loadFileManager(); // Refresh file list
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // ADD CREATE FILE FUNCTIONS USING EXACT SAME PATTERN AS WORKING BUTTONS
+        function showCreateFile() {
+            document.getElementById('create-file-section').style.display = 'block';
+            document.getElementById('new-filename').focus();
+            document.getElementById('result').textContent = '';
+        }
+
+        function hideCreateFile() {
+            document.getElementById('create-file-section').style.display = 'none';
+            document.getElementById('new-filename').value = '';
+        }
+
+        function createFile() {
+            const filename = document.getElementById('new-filename').value.trim();
+            
+            if (!filename) {
+                document.getElementById('result').textContent = 'Please enter a filename';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/create-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())<!DOCTYPE html>
+<!--
+Picowide Web Interface - Main HTML File
+
+This file provides the complete web-based development environment interface
+for the Raspberry Pi Pico 2 W. It includes file management, editing capabilities,
+and system testing functions accessible through any web browser.
+
+Features:
+- Responsive design for mobile and desktop devices
+- File browser with list, select, open, edit, save operations
+- Real-time file editing with syntax highlighting (monospace)
+- Connection testing and hardware interaction
+- Clean, modern UI following mobile-first design principles
+
+Technical Notes:
+- Uses vanilla JavaScript (no external dependencies)
+- Communicates with Pico via HTTP POST requests
+- Form data handling for file operations
+- Dynamic DOM manipulation for file list display
+
+Author: Picowide Project
+Version: 1.09 (Modified for FOSS release)
+Compatible with: CircuitPython adafruit_httpserver
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picowide</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Custom Modal Styling */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-content button {
+            margin: 10px;
+            min-width: 100px; /* Ensure buttons are decently sized */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ===== HEADER SECTION ===== -->
+        <h1>Picowide v1.25 (FOSS Edition)</h1>
+        <p>Raspberry Pi Pico 2 W Development Environment</p>
+        
+        <!-- ===== CORE FUNCTIONALITY BUTTONS ===== -->
+        <!-- These buttons provide basic system testing and hardware interaction -->
+        <button onclick="testButton()">Test Connection</button>
+        <button id="blinky-btn" onclick="runBlinky()">Blinky On</button>
+        <button id="monitor-btn" onclick="runMonitor()">Monitor On</button>
+        
+        <!-- ===== FILE MANAGEMENT SECTION ===== -->
+        <!-- This section provides a web-based file manager and editor -->
+        
+        <!-- File listing trigger -->
+        <button onclick="loadFileManager()">List Files</button>
+        <button onclick="showCreateFile()">Create File</button>
+        
+        <!-- Results display area -->
+        <div id="result"></div>
+        
+        <!-- File creation form (hidden by default) -->
+        <div id="create-file-section" style="display: none;">
+            <h3>Create New File:</h3>
+            <input type="text" id="new-filename" placeholder="filename.py" style="width: 70%; padding: 8px; margin: 4px;">
+            <button onclick="createFile()">Create</button>
+            <button onclick="hideCreateFile()">Cancel</button>
+        </div>
+
+        <!-- Console Monitor window (hidden by default) -->
+        <div id="monitor-section" style="display: none;">
+            <h3>Console Monitor</h3>
+            <div id="console-output" style="width: 100%; height: 300px; background-color: #fff; color: #000; font-family: monospace; font-size: 12px; padding: 10px; overflow-y: auto; border: 2px solid #333; text-align: left;"></div>
+            <button onclick="clearMonitor()">Clear Monitor</button>
+        </div>
+        
+        <!-- File operation button (shown when file is selected) -->
+        <button id="open-btn" style="display: none;" onclick="openSelectedFile()">Open</button>
+        <button id="delete-btn" style="display: none;" onclick="showDeleteConfirm()">Delete</button>
+        
+        <!-- File list display container -->
+        <div id="file-list" class="file-list" style="display: none;">
+            <h3>Files:</h3>
+            <div id="files" class="files"></div>
+            <button onclick="closeFileList()">Close File List</button> <!-- NEW BUTTON -->
+        </div>
+        
+        <!-- File editor interface -->
+        <div id="editor-section" style="display: none;">
+            <h3 id="editor-title">Editing: filename</h3>
+            <textarea id="file-editor" rows="20" cols="80"
+                      style="width: 100%; font-family: monospace; font-size: 14px;"
+                      placeholder="File content will appear here..."></textarea>
+            <br>
+            <button onclick="saveFile()">Save</button>
+            <button onclick="closeEditor()">Close</button>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="confirm-message"></h3>
+            <button id="confirmYes" onclick="confirmAction(true)">Yes</button>
+            <button id="confirmNo" onclick="confirmAction(false)">No</button>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for modal handling
+        let currentConfirmAction = null;
+        let currentConfirmFilename = '';
+
+        function showCustomConfirm(message, callback, filename) {
+            document.getElementById('confirmModal').style.display = 'block';
+            document.getElementById('confirm-message').textContent = message;
+            currentConfirmAction = callback;
+            currentConfirmFilename = filename;
+        }
+
+        function confirmAction(isConfirmed) {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (currentConfirmAction) {
+                currentConfirmAction(isConfirmed, currentConfirmFilename);
+            }
+            currentConfirmAction = null;
+            currentConfirmFilename = '';
+        }
+
+        function testButton() {
+            fetch('/test', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('result').textContent = result;
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+        
+        function runBlinky() {
+            fetch('/run-blinky', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('blinky-btn').textContent = result;
+                    document.getElementById('result').textContent = '';
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+
+        function runMonitor() {
+            fetch('/run-monitor', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('monitor-btn').textContent = result;
+                    if (result === 'Monitor Off') {
+                        document.getElementById('monitor-section').style.display = 'block';
+                        startMonitoring();
+                    } else {
+                        document.getElementById('monitor-section').style.display = 'none';
+                        stopMonitoring();
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
+        }
+
+        let monitorInterval;
+
+        function startMonitoring() {
+            monitorInterval = setInterval(() => {
+                fetch('/get-console', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(result => {
+                        if (result.trim()) {
+                            const consoleDiv = document.getElementById('console-output');
+                            consoleDiv.innerHTML += result + '<br>';
+                            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+                        }
+                    })
+                    .catch(error => {
+                        console.log('Monitor fetch error:', error);
+                    });
+            }, 500);
+        }
+
+        function stopMonitoring() {
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+        }
+
+        function clearMonitor() {
+            document.getElementById('console-output').innerHTML = '';
+        }
+
+        function loadFileManager() {
+            fetch('/list-files', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    const lines = result.split('\n');
+                    if (lines[0].includes('Files found:')) {
+                        const files = lines.slice(2).filter(line => line.trim() !== '');
+                        document.getElementById('result').textContent = '';
+                        const fileListDiv = document.getElementById('file-list');
+                        const filesDiv = document.getElementById('files');
+                        filesDiv.innerHTML = '';
+                        files.forEach(filename => {
+                            const fileRow = document.createElement('div');
+                            fileRow.className = 'file-row';
+                            fileRow.textContent = filename;
+                            fileRow.onclick = () => selectFile(filename);
+                            filesDiv.appendChild(fileRow);
+                        });
+                        fileListDiv.style.display = 'block';
+                    } else {
+                        document.getElementById('result').textContent = result;
+                        document.getElementById('file-list').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                    document.getElementById('file-list').style.display = 'none';
+                });
+        }
+        
+        function selectFile(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/select-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                // These lines were commented out in the previous version, causing the issue.
+                // They are now re-enabled to show the Open/Delete buttons.
+                document.getElementById('open-btn').style.display = 'inline-block';
+                document.getElementById('delete-btn').style.display = 'inline-block';
+                document.getElementById('open-btn').setAttribute('data-filename', filename);
+                document.getElementById('delete-btn').setAttribute('data-filename', filename);
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function openSelectedFile() {
+            const filename = document.getElementById('open-btn').getAttribute('data-filename');
+            if (!filename) return;
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/open-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                const lines = result.split('\n');
+                const content = lines.slice(2).join('\n');
+                document.getElementById('file-editor').value = content;
+                document.getElementById('editor-title').textContent = `Editing: ${filename}`;
+                document.getElementById('editor-section').style.display = 'block';
+                document.getElementById('result').textContent = `Opened ${filename} in editor`;
+                document.getElementById('open-btn').style.display = 'none';
+                document.getElementById('delete-btn').style.display = 'none';
+                document.getElementById('file-list').style.display = 'none'; // Hide file list when editor opens
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function saveFile() {
+            const filename = document.getElementById('editor-title').textContent.replace('Editing: ', '');
+            const content = document.getElementById('file-editor').value;
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('content', content);
+            
+            fetch('/save-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+        
+        function closeEditor() {
+            document.getElementById('editor-section').style.display = 'none';
+            document.getElementById('result').textContent = 'Editor closed';
+            loadFileManager(); // Re-show file list after closing editor
+        }
+
+        // New function to show custom delete confirmation
+        function showDeleteConfirm() {
+            const filename = document.getElementById('delete-btn').getAttribute('data-filename');
+            if (!filename) return;
+            showCustomConfirm(`Are you sure you want to delete '${filename}'?`, (confirmed, fileToDelete) => {
+                if (confirmed) {
+                    deleteSelectedFileConfirmed(fileToDelete);
+                } else {
+                    document.getElementById('result').textContent = 'Deletion cancelled.';
+                }
+            }, filename);
+        }
+        
+        // Modified delete function to be called after confirmation
+        function deleteSelectedFileConfirmed(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/delete-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('deleted successfully')) {
+                    document.getElementById('open-btn').style.display = 'none';
+                    document.getElementById('delete-btn').style.display = 'none';
+                    loadFileManager(); // Refresh file list
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // ADD CREATE FILE FUNCTIONS USING EXACT SAME PATTERN AS WORKING BUTTONS
+        function showCreateFile() {
+            document.getElementById('create-file-section').style.display = 'block';
+            document.getElementById('new-filename').focus();
+            document.getElementById('result').textContent = '';
+        }
+
+        function hideCreateFile() {
+            document.getElementById('create-file-section').style.display = 'none';
+            document.getElementById('new-filename').value = '';
+        }
+
+        function createFile() {
+            const filename = document.getElementById('new-filename').value.trim();
+            
+            if (!filename) {
+                document.getElementById('result').textContent = 'Please enter a filename';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/create-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('created successfully')) {
+                    hideCreateFile();
+                    loadFileManager();
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // NEW FUNCTION TO CLOSE THE FILE LIST
+        function closeFileList() {
+            document.getElementById('file-list').style.display = 'none';
+            document.getElementById('result').textContent = 'File list closed.';
+            document.getElementById('open-btn').style.display = 'none'; // Hide open/delete buttons
+            document.getElementById('delete-btn').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('created successfully')) {
+                    hideCreateFile();
+                    loadFileManager();
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+    </script>
+</body>
+</html>
