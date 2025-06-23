@@ -63,21 +63,19 @@ last_activity_time = time.monotonic()
 WIFI_TIMEOUT_SECONDS = config.WIFI_AP_TIMEOUT_MINUTES * 60
 last_timeout_check_log_time = time.monotonic() # For periodic + logging
 ap_is_off_and_logged = False # NEW: Flag to prevent repeated shutdown messages after AP is off
-timeout_disabled = True # NEW: Flag to disable automatic timeout when user takes control
+timeout_disabled = False # NEW: Flag to disable automatic timeout when user takes control
 
 def update_activity_time():
-    """
-    Updates the global timestamp for the last detected user activity.
-    Called by every web server route to reset the Wi-Fi timeout.
-    """
-    global last_activity_time, ap_is_off_and_logged, timeout_disabled
-    # Only reset if Wi-Fi is still active. Avoid logging if already shut down.
-    if wifi.radio.enabled:
-        last_activity_time = time.monotonic()
-        ap_is_off_and_logged = False # Reset flag when activity detected and AP is on (i.e., AP is now working)
-        timeout_disabled = True # NEW: Disable automatic timeout on first user interaction
-        # console_print(f"Activity detected, timer reset. (Elapsed: {round(time.monotonic() - last_activity_time, 1)}s / Timeout: {WIFI_TIMEOUT_SECONDS}s)")
-
+   """
+   Updates the global timestamp for the last detected user activity.
+   Called by every web server route to reset the Wi-Fi timeout.
+   """
+   global last_activity_time, ap_is_off_and_logged
+   # Only reset if Wi-Fi is still active. Avoid logging if already shut down.
+   if wifi.radio.enabled:
+       last_activity_time = time.monotonic()
+       ap_is_off_and_logged = False # Reset flag when activity detected and AP is on (i.e., AP is now working)
+       # console_print(f"Activity detected, timer reset. (Elapsed: {round(time.monotonic() - last_activity_time, 1)}s / Timeout: {WIFI_TIMEOUT_SECONDS}s)")
 
 def shut_down_wifi_and_sleep(sleep_duration=None):
     """
@@ -212,6 +210,7 @@ def update_blinky():
         
         # Add console output for monitoring
         status = "LED ON" if led_state else "LED OFF"
+        #console_print(status) # Uncomment to show each on/off cycle on the console
         # console_print(status) # Removed to avoid spamming console during timeout test
 
 # =============================================================================
@@ -276,6 +275,7 @@ def run_blinky(request: Request):
     try:
         blinky_enabled = not blinky_enabled
         next_action = "Blinky Off" if blinky_enabled else "Blinky On"
+        console_print("Blinky on" if blinky_enabled else "Blinky off")        
         return Response(request, next_action, content_type="text/plain")
     except Exception as e:
         return Response(request, f"Error: {str(e)}", content_type="text/plain")
