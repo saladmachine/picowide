@@ -1,6 +1,2 @@
 sphinx
 sphinx-rtd-theme
-# Add any other Sphinx extensions you use, e.g.:
-# myst-parser
-# sphinx-autodoc-typehints
-# sphinx.ext.napoleon # Already covered by sphinx-rtd-theme usually, but good to be explicit
