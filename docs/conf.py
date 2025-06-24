@@ -6,8 +6,8 @@ sys.path.insert(0, os.path.abspath('../../')) # Adjust this if your code is not 
 
 # Project information
 project = 'picowide'
-copyright = '2025, Your Name' # Replace with your name
-author = 'Your Name' # Replace with your name
+copyright = '2025, Joseph Wayne Pardue' # Replace with your name
+author = 'Josepy Wayne Pardue' # Replace with your name
 
 # The full version, including alpha/beta/rc tags
 release = '0.1.0'
