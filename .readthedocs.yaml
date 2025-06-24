@@ -13,7 +13,7 @@ sphinx:
 
 python:
   install:
-    - requirements: docs/requirements.txt # <-- Simplified this section
+    - requirements: docs/requirements.txt
 
 # Ensure your docs/requirements.txt file contains:
 # sphinx

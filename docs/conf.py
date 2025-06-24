@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath('../../')) # Adjust this if your code is not 
 # Project information
 project = 'picowide'
 copyright = '2025, Joseph Wayne Pardue' # Replace with your name
-author = 'Josepy Wayne Pardue' # Replace with your name
+author = 'Joseph Wayne Pardue' # Replace with your name
 
 # The full version, including alpha/beta/rc tags
 release = '0.1.0'
@@ -24,12 +24,7 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # -- Options for HTML output -------------------------------------------------
-html_theme = 'sphinx_rtd_theme' # The Read the Docs theme
-html_static_path = ['_static']
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
+html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 # -- Extension configuration -------------------------------------------------
