@@ -15,5 +15,4 @@ sphinx:
 python:
   install:
     - method: pip
-      path: . # If your main project needs to be installed for autodoc
     - requirements: docs/requirements.txt # Optional: For documentation-specific Python dependencies
