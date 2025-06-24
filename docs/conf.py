@@ -40,3 +40,16 @@ napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
+
+# Mock imports for CircuitPython modules that can't be imported
+autodoc_mock_imports = [
+    "board", 
+    "digitalio", 
+    "analogio", 
+    "busio", 
+    "pwmio",
+    "displayio",
+    "time",
+    "microcontroller",
+    "supervisor"
+]
