@@ -7,8 +7,7 @@ build:
     python: "3.10" # Using a stable Python version, not the bleeding edge
 
 sphinx:
-  configuration: conf.py # Tells Sphinx the name of the config file
-  conf_dir: docs/
+  configuration: docs/conf.py # Tells Sphinx the name of the config file
   builder: html
   fail_on_warning: true
 
