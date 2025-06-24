@@ -1,0 +1,22 @@
+# .readthedocs.yaml
+version: 2
+
+build:
+  os: ubuntu-latest # Using a recent stable Ubuntu version
+  tools:
+    python: "3.10" # Using a stable Python version, not the bleeding edge
+
+sphinx:
+  configuration: conf.py # Tells Sphinx the name of the config file
+  builder: html
+  fail_on_warning: true
+
+# This tells Read the Docs that your Sphinx project's root is in the 'docs/' directory
+docs:
+  source_dir: docs/
+
+python:
+  install:
+    - method: pip
+      path: . # If your main project needs to be installed for autodoc
+    - requirements: docs/requirements.txt # Optional: For documentation-specific Python dependencies
