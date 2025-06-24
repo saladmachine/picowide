@@ -2,7 +2,7 @@
 version: 2
 
 build:
-  os: ubuntu-latest # Using a recent stable Ubuntu version
+  os: ubuntu-22.04 # Using a recent stable Ubuntu version
   tools:
     python: "3.10" # Using a stable Python version, not the bleeding edge
 
