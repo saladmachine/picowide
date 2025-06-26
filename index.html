@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pico 2 W IDE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Pico 2 W Development Environment</h1>
+        
+        <div class="tab-container">
+            <div class="tabs">
+                <button class="tab active" onclick="openTab(event, 'editor')">File Editor</button>
+                <button class="tab" onclick="openTab(event, 'serial')">Console Monitor</button>
+                <button class="tab" onclick="openTab(event, 'browser')">File Browser</button>
+            </div>
+            
+            <!-- File Editor Tab -->
+            <div id="editor" class="tab-content active">
+                <div class="form-group">
+                    <label for="filename">filename:</label>
+                    <input type="text" id="filename" placeholder="Enter filename to load/save" value="" autocapitalize="off" spellcheck="false">
+                </div>
+                
+                <div class="form-group">
+                    <label for="filecontent">file Content:</label>
+                    <textarea id="filecontent" placeholder="# Enter your CircuitPython code here..." autocapitalize="off" spellcheck="false"></textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn" onclick="saveFile()">Save File</button>
+                    <button class="btn" onclick="loadFile()">Load File</button>
+                    <button class="btn" onclick="clearEditor()">Clear Editor</button>
+                </div>
+                
+                <div id="status" class="status"></div>
+            </div>
+            
+            <!-- Console Monitor Tab -->
+            <div id="serial" class="tab-content">
+                <div id="serial-status" class="serial-status disconnected">
+                    Console Monitor: Stopped
+                </div>
+                
+                <div class="serial-controls">
+                    <button class="btn" onclick="connectSerial()">Start Monitoring</button>
+                    <button class="btn" onclick="disconnectSerial()">Stop Monitoring</button>
+                    <button class="btn" onclick="sendCtrlC()">Interrupt Code</button>
+                    <button class="btn danger" onclick="clearTerminal()">Clear Display</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="terminal">Console Output:</label>
+                    <div id="terminal" class="terminal">Click "Start Monitoring" to see console output...\n</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="command-input">Execute Python Command:</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="command-input" class="command-input" 
+                               style="flex: 1; min-width: 200px; text-transform: none; autocapitalize: off;"
+                               placeholder="Type Python command (e.g., print('hello'))" 
+                               onkeypress="handleCommandInput(event)" autocapitalize="off" spellcheck="false">
+                        <button class="btn" onclick="sendCommand()" style="white-space: nowrap;">Send</button>
+                    </div>
+                </div>
+                
+                <div id="serial-status-msg" class="status"></div>
+            </div>
+            
+            <!-- File Browser Tab -->
+            <div id="browser" class="tab-content">
+                <div class="form-group">
+                    <label>Files on Pico 2 W:</label>
+                    <div id="file-list" style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; min-height: 200px; background-color: #f9f9f9;">
+                        <div style="text-align: center; color: #666; padding: 20px;">
+                            Click "Refresh" to see files
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn" onclick="refreshFileList()">Refresh</button>
+                    <button class="btn" onclick="loadSelectedFile()">Load Selected</button>
+                    <button class="btn danger" onclick="deleteSelectedFile()">Delete Selected</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new-filename">Create New File:</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="new-filename" 
+                               style="flex: 1; min-width: 200px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; text-transform: none; autocapitalize: off;"
+                               placeholder="Enter filename (e.g., main.py)" autocapitalize="off" spellcheck="false">
+                        <button class="btn" onclick="createNewFile()" style="white-space: nowrap;">Create</button>
+                    </div>
+                </div>
+                
+                <div id="browser-status" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let consoleUpdateInterval = null;
+        let lastConsoleLength = 0;
+        
+        // Tab switching
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove("active");
+            }
+            tablinks = document.getElementsByClassName("tab");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove("active");
+            }
+            document.getElementById(tabName).classList.add("active");
+            evt.currentTarget.classList.add("active");
+        }
+        
+        // File Editor Functions
+        function saveFile() {
+            const filename = document.getElementById('filename').value.trim();
+            const content = document.getElementById('filecontent').value;
+            
+            if (!filename) {
+                showStatus('Please enter a filename', 'error');
+                return;
+            }
+            
+            // Disable save button during operation
+            const saveBtn = event.target;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            
+            fetch('/save_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    filename: filename,
+                    content: content
+                })
+            })
+            .then(response => response.text())
+            .then(data => {
+                if (filename.toLowerCase() === 'code.py') {
+                    showStatus('SUCCESS: code.py saved! Pico 2 W will reboot in 2 seconds to run new code...', 'warning');
+                    // Show countdown
+                    setTimeout(() => {
+                        showStatus('Rebooting now... Reconnect to PicoTest in a moment.', 'warning');
+                    }, 2000);
+                } else {
+                    showStatus('SUCCESS: File saved successfully: ' + filename, 'success');
+                }
+                console.log('File saved:', filename);
+            })
+            .catch(error => {
+                showStatus('ERROR: Error saving file: ' + error, 'error');
+                console.error('Error:', error);
+            })
+            .finally(() => {
+                // Re-enable save button
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save File';
+            });
+        }
+        
+        function loadFile() {
+            const filename = document.getElementById('filename').value.trim();
+            
+            if (!filename) {
+                showStatus('Please enter a filename to load', 'error');
+                return;
+            }
+            
+            fetch('/load_file', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({filename: filename})
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('File not found or error loading');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('filecontent').value = data.content;
+                showStatus('SUCCESS: File loaded successfully: ' + filename, 'success');
+                console.log('File loaded:', filename);
+            })
+            .catch(error => {
+                showStatus('ERROR: Error loading file: ' + error, 'error');
+                console.error('Error:', error);
+            });
+        }
+        
+        function loadCodePy() {
+            document.getElementById('filename').value = 'code.py';
+            loadFile();
+        }
+        
+        function clearEditor() {
+            document.getElementById('filename').value = '';
+            document.getElementById('filecontent').value = '';
+            hideStatus();
+        }
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(hideStatus, 5000);
+            }
+        }
+        
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+        
+        // Console Monitor Functions
+        async function connectSerial() {
+            // Start polling for console updates
+            if (consoleUpdateInterval) {
+                clearInterval(consoleUpdateInterval);
+            }
+            
+            consoleUpdateInterval = setInterval(updateConsole, 500); // Update every 500ms
+            updateSerialStatus(true);
+            showSerialStatus('Console monitoring started', 'success');
+            
+            // Initial load
+            updateConsole();
+        }
+        
+        async function disconnectSerial() {
+            if (consoleUpdateInterval) {
+                clearInterval(consoleUpdateInterval);
+                consoleUpdateInterval = null;
+            }
+            
+            updateSerialStatus(false);
+            showSerialStatus('Console monitoring stopped', 'warning');
+        }
+        
+        async function updateConsole() {
+            try {
+                const response = await fetch('/get_console');
+                if (!response.ok) throw new Error('Failed to get console data');
+                
+                const consoleData = await response.json();
+                
+                // Only update if there's new content
+                if (consoleData.length !== lastConsoleLength) {
+                    const terminal = document.getElementById('terminal');
+                    
+                    // Build console text
+                    let consoleText = '';
+                    consoleData.forEach(entry => {
+                        consoleText += entry.message;
+                    });
+                    
+                    terminal.textContent = consoleText;
+                    terminal.scrollTop = terminal.scrollHeight;
+                    lastConsoleLength = consoleData.length;
+                }
+            } catch (error) {
+                showSerialStatus('Error updating console: ' + error.message, 'error');
+            }
+        }
+        
+        async function sendCommand() {
+            const input = document.getElementById('command-input');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            try {
+                await fetch('/send_command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: command })
+                });
+                
+                input.value = '';
+                // Force console update
+                setTimeout(updateConsole, 100);
+                
+            } catch (error) {
+                showSerialStatus('Error sending command: ' + error.message, 'error');
+            }
+        }
+        
+        async function sendCtrlC() {
+            try {
+                print("=== INTERRUPT REQUESTED ===")
+                showSerialStatus('Interrupt signal sent', 'success');
+                setTimeout(updateConsole, 100);
+            } catch (error) {
+                showSerialStatus('Error sending interrupt: ' + error.message, 'error');
+            }
+        }
+        
+        function clearTerminal() {
+            document.getElementById('terminal').textContent = '';
+        }
+        
+        function handleCommandInput(event) {
+            if (event.key === 'Enter') {
+                sendCommand();
+            }
+        }
+        
+        function updateSerialStatus(connected) {
+            const statusDiv = document.getElementById('serial-status');
+            if (connected) {
+                statusDiv.textContent = 'Console Monitor: Active';
+                statusDiv.className = 'serial-status connected';
+            } else {
+                statusDiv.textContent = 'Console Monitor: Stopped';
+                statusDiv.className = 'serial-status disconnected';
+            }
+        }
+        
+        function showSerialStatus(message, type) {
+            const status = document.getElementById('serial-status-msg');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            if (type === 'success') setTimeout(() => status.style.display = 'none', 3000);
+        }
+        
+        // File Browser Functions
+        async function refreshFileList() {
+            try {
+                const response = await fetch('/list_files');
+                if (!response.ok) throw new Error('Failed to get file list');
+                
+                const files = await response.json();
+                displayFileList(files);
+                showBrowserStatus('File list refreshed', 'success');
+                
+            } catch (error) {
+                showBrowserStatus('Error refreshing files: ' + error.message, 'error');
+            }
+        }
+        
+        function displayFileList(files) {
+            const fileListDiv = document.getElementById('file-list');
+            
+            if (files.length === 0) {
+                fileListDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No files found</div>';
+                return;
+            }
+            
+            // Clear the container first
+            fileListDiv.innerHTML = '';
+            
+            // Create file elements using DOM instead of innerHTML
+            files.forEach(file => {
+                const fileDiv = document.createElement('div');
+                fileDiv.style.cssText = 'padding: 8px 12px; margin: 2px 0; border-radius: 4px; cursor: pointer; background-color: white; border: 1px solid #ddd;';
+                
+                // Check if this file is selected
+                const isSelected = (window.selectedFile === file.name);
+                if (isSelected) {
+                    fileDiv.style.backgroundColor = '#4CAF50';
+                    fileDiv.style.color = 'white';
+                    fileDiv.style.border = 'none';
+                }
+                
+                fileDiv.innerHTML = `
+                    <strong>${file.name}</strong>
+                    <span style="float: right; color: ${isSelected ? '#fff' : '#666'};">
+                        ${file.size} bytes
+                    </span>`;
+                
+                // Add click handler
+                fileDiv.addEventListener('click', function() {
+                    window.selectedFile = file.name;
+                    refreshFileList(); // Refresh to show selection
+                });
+                
+                fileListDiv.appendChild(fileDiv);
+            });
+        }
+        
+        function selectFile(filename) {
+            window.selectedFile = filename;
+            refreshFileList(); // Refresh to show selection
+        }
+        
+        async function loadSelectedFile() {
+            if (!window.selectedFile) {
+                showBrowserStatus('Please select a file first', 'error');
+                return;
+            }
+            
+            // Switch to editor tab and load the file
+            document.getElementById('filename').value = window.selectedFile;
+            openTab({currentTarget: document.querySelector('.tab')}, 'editor');
+            loadFile();
+        }
+        
+        async function deleteSelectedFile() {
+            if (!window.selectedFile) {
+                showBrowserStatus('Please select a file first', 'error');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to delete "${window.selectedFile}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/delete_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: window.selectedFile })
+                });
+                
+                if (!response.ok) throw new Error('Failed to delete file');
+                
+                window.selectedFile = null;
+                refreshFileList();
+                showBrowserStatus('File deleted successfully', 'success');
+                
+            } catch (error) {
+                showBrowserStatus('Error deleting file: ' + error.message, 'error');
+            }
+        }
+        
+        async function createNewFile() {
+            const filename = document.getElementById('new-filename').value.trim();
+            
+            if (!filename) {
+                showBrowserStatus('Please enter a filename', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/create_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: filename })
+                });
+                
+                if (!response.ok) throw new Error('Failed to create file');
+                
+                document.getElementById('new-filename').value = '';
+                refreshFileList();
+                showBrowserStatus('File created successfully', 'success');
+                
+            } catch (error) {
+                showBrowserStatus('Error creating file: ' + error.message, 'error');
+            }
+        }
+        
+        function showBrowserStatus(message, type) {
+            const status = document.getElementById('browser-status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            status.style.display = 'block';
+            if (type === 'success') setTimeout(() => status.style.display = 'none', 3000);
+        }
+    </script>
+</body>
+</html>

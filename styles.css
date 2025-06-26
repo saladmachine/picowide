@@ -1,0 +1,379 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.tab-container {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.tabs {
+    display: flex;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab {
+    flex: 1;
+    padding: 15px 20px;
+    cursor: pointer;
+    text-align: center;
+    font-weight: bold;
+    border: none;
+    background: none;
+    transition: background-color 0.3s;
+}
+
+.tab.active {
+    background-color: white;
+    border-bottom: 2px solid #4CAF50;
+}
+
+.tab:hover:not(.active) {
+    background-color: #e9ecef;
+}
+
+.tab-content {
+    display: none;
+    padding: 30px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #4CAF50;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.version {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+    font-style: italic;
+}
+
+.led-control {
+    background-color: #fff3e0;
+    border: 1px solid #ff9800;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.led-status {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.led-on {
+    color: #4CAF50;
+}
+
+.led-off {
+    color: #f44336;
+}
+
+/* REPL-specific styles */
+.repl-container {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    font-family: 'Courier New', Monaco, Consolas, monospace;
+    overflow: hidden;
+}
+
+.repl-output {
+    height: 350px;
+    padding: 15px;
+    overflow-y: auto;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.repl-line {
+    margin: 2px 0;
+}
+
+.repl-command {
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.repl-result {
+    color: #4CAF50;
+    margin-left: 0;
+}
+
+.repl-output-text {
+    color: #87CEEB;
+    margin-left: 0;
+}
+
+.repl-error {
+    color: #ff6b6b;
+    margin-left: 0;
+}
+
+.repl-info {
+    color: #ffd93d;
+    margin-left: 0;
+}
+
+.repl-welcome {
+    color: #87CEEB;
+    font-style: italic;
+    margin-bottom: 10px;
+}
+
+.repl-input-container {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #2d2d2d;
+    border-top: 1px solid #444;
+}
+
+.repl-prompt {
+    color: #4CAF50;
+    font-weight: bold;
+    margin-right: 8px;
+    font-family: 'Courier New', Monaco, Consolas, monospace;
+}
+
+.repl-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-family: 'Courier New', Monaco, Consolas, monospace;
+    font-size: 14px;
+    outline: none;
+    padding: 5px;
+}
+
+.repl-input::placeholder {
+    color: #888;
+}
+
+.repl-btn {
+    margin-left: 10px;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.repl-controls {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #333;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    box-sizing: border-box;
+    text-transform: none;
+    autocapitalize: off;
+}
+
+textarea {
+    width: 100%;
+    height: 400px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    box-sizing: border-box;
+    resize: vertical;
+    line-height: 1.4;
+    text-transform: none;
+    autocapitalize: off;
+}
+
+.btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    margin: 8px 8px 8px 0;
+    transition: background-color 0.3s;
+}
+
+.btn:hover {
+    background-color: #45a049;
+}
+
+.btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.btn.danger {
+    background-color: #f44336;
+}
+
+.btn.danger:hover {
+    background-color: #da190b;
+}
+
+.btn.led-on {
+    background-color: #4CAF50;
+}
+
+.btn.led-off {
+    background-color: #f44336;
+}
+
+.status {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 6px;
+    display: none;
+    font-weight: bold;
+}
+
+.status.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+h1 {
+    color: #333;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.button-group {
+    margin-top: 20px;
+}
+
+.cooperative-status {
+    background-color: #e3f2fd;
+    border: 1px solid #2196f3;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-weight: bold;
+    color: #1976d2;
+}
+
+/* Responsive design for mobile devices */
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .tabs {
+        flex-wrap: wrap;
+    }
+    
+    .tab {
+        flex: 1 1 50%;
+        min-width: 120px;
+    }
+    
+    .repl-input-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .repl-input {
+        width: 100%;
+    }
+    
+    .repl-btn {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .repl-output {
+        height: 250px;
+    }
+    
+    textarea {
+        height: 300px;
+    }
+}
+
+/* Scrollbar styling for webkit browsers */
+.repl-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.repl-output::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+.repl-output::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.repl-output::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
