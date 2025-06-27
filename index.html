@@ -1,477 +1,419 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Pico 2 W IDE</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picowide v1.0</title> <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Custom Modal Styling */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; /* 15% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 400px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-content button {
+            margin: 10px;
+            min-width: 100px; /* Ensure buttons are decently sized */
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Pico 2 W Development Environment</h1>
+        <h1>Picowide v1.0</h1> <p>Raspberry Pi Pico 2 W Development Environment</p>
         
-        <div class="tab-container">
-            <div class="tabs">
-                <button class="tab active" onclick="openTab(event, 'editor')">File Editor</button>
-                <button class="tab" onclick="openTab(event, 'serial')">Console Monitor</button>
-                <button class="tab" onclick="openTab(event, 'browser')">File Browser</button>
-            </div>
-            
-            <!-- File Editor Tab -->
-            <div id="editor" class="tab-content active">
-                <div class="form-group">
-                    <label for="filename">filename:</label>
-                    <input type="text" id="filename" placeholder="Enter filename to load/save" value="" autocapitalize="off" spellcheck="false">
-                </div>
-                
-                <div class="form-group">
-                    <label for="filecontent">file Content:</label>
-                    <textarea id="filecontent" placeholder="# Enter your CircuitPython code here..." autocapitalize="off" spellcheck="false"></textarea>
-                </div>
-                
-                <div class="button-group">
-                    <button class="btn" onclick="saveFile()">Save File</button>
-                    <button class="btn" onclick="loadFile()">Load File</button>
-                    <button class="btn" onclick="clearEditor()">Clear Editor</button>
-                </div>
-                
-                <div id="status" class="status"></div>
-            </div>
-            
-            <!-- Console Monitor Tab -->
-            <div id="serial" class="tab-content">
-                <div id="serial-status" class="serial-status disconnected">
-                    Console Monitor: Stopped
-                </div>
-                
-                <div class="serial-controls">
-                    <button class="btn" onclick="connectSerial()">Start Monitoring</button>
-                    <button class="btn" onclick="disconnectSerial()">Stop Monitoring</button>
-                    <button class="btn" onclick="sendCtrlC()">Interrupt Code</button>
-                    <button class="btn danger" onclick="clearTerminal()">Clear Display</button>
-                </div>
-                
-                <div class="form-group">
-                    <label for="terminal">Console Output:</label>
-                    <div id="terminal" class="terminal">Click "Start Monitoring" to see console output...\n</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="command-input">Execute Python Command:</label>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <input type="text" id="command-input" class="command-input" 
-                               style="flex: 1; min-width: 200px; text-transform: none; autocapitalize: off;"
-                               placeholder="Type Python command (e.g., print('hello'))" 
-                               onkeypress="handleCommandInput(event)" autocapitalize="off" spellcheck="false">
-                        <button class="btn" onclick="sendCommand()" style="white-space: nowrap;">Send</button>
-                    </div>
-                </div>
-                
-                <div id="serial-status-msg" class="status"></div>
-            </div>
-            
-            <!-- File Browser Tab -->
-            <div id="browser" class="tab-content">
-                <div class="form-group">
-                    <label>Files on Pico 2 W:</label>
-                    <div id="file-list" style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; min-height: 200px; background-color: #f9f9f9;">
-                        <div style="text-align: center; color: #666; padding: 20px;">
-                            Click "Refresh" to see files
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="button-group">
-                    <button class="btn" onclick="refreshFileList()">Refresh</button>
-                    <button class="btn" onclick="loadSelectedFile()">Load Selected</button>
-                    <button class="btn danger" onclick="deleteSelectedFile()">Delete Selected</button>
-                </div>
-                
-                <div class="form-group">
-                    <label for="new-filename">Create New File:</label>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <input type="text" id="new-filename" 
-                               style="flex: 1; min-width: 200px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; text-transform: none; autocapitalize: off;"
-                               placeholder="Enter filename (e.g., main.py)" autocapitalize="off" spellcheck="false">
-                        <button class="btn" onclick="createNewFile()" style="white-space: nowrap;">Create</button>
-                    </div>
-                </div>
-                
-                <div id="browser-status" class="status"></div>
-            </div>
+        <!--<button onclick="testButton()">Test Connection</button>-->
+        <button id="blinky-btn" onclick="runBlinky()">Blinky On</button>
+        <button id="monitor-btn" onclick="runMonitor()">Monitor On</button>
+        
+        <button onclick="loadFileManager()">List Files</button>
+        <button onclick="showCreateFile()">Create File</button>
+        <button id="hotspot-btn" onclick="toggleHotspotControl()">Keep Hotspot Open</button> <div id="result"></div>
+        
+        <div id="create-file-section" style="display: none;">
+            <h3>Create New File:</h3>
+            <input type="text" id="new-filename" placeholder="filename.py" style="width: 70%; padding: 8px; margin: 4px;">
+            <button onclick="createFile()">Create</button>
+            <button onclick="hideCreateFile()">Cancel</button>
+        </div>
+
+        <div id="monitor-section" style="display: none;">
+            <h3>Console Monitor</h3>
+            <div id="console-output" style="width: 100%; height: 300px; background-color: #fff; color: #000; font-family: monospace; font-size: 12px; padding: 10px; overflow-y: auto; border: 2px solid #333; text-align: left;"></div>
+            <button onclick="clearMonitor()">Clear Monitor</button>
+        </div>
+        
+        <button id="open-btn" style="display: none;" onclick="openSelectedFile()">Open</button>
+        <button id="delete-btn" style="display: none;" onclick="showDeleteConfirm()">Delete</button>
+        
+        <div id="file-list" class="file-list" style="display: none;">
+            <h3>Files:</h3>
+            <div id="files" class="files"></div>
+            <button onclick="closeFileList()">Close File List</button>
+        </div>
+        
+        <div id="editor-section" style="display: none;">
+            <h3 id="editor-title">Editing: filename</h3>
+            <textarea id="file-editor" rows="20" cols="80"
+                      style="width: 100%; font-family: monospace; font-size: 14px;"
+                      placeholder="File content will appear here..."></textarea>
+            <br>
+            <button onclick="saveFile()">Save</button>
+            <button onclick="closeEditor()">Close</button>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3 id="confirm-message"></h3>
+            <button id="confirmYes" onclick="confirmAction(true)">Yes</button>
+            <button id="confirmNo" onclick="confirmAction(false)">No</button>
         </div>
     </div>
 
     <script>
-        let consoleUpdateInterval = null;
-        let lastConsoleLength = 0;
-        
-        // Tab switching
-        function openTab(evt, tabName) {
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].classList.remove("active");
-            }
-            tablinks = document.getElementsByClassName("tab");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].classList.remove("active");
-            }
-            document.getElementById(tabName).classList.add("active");
-            evt.currentTarget.classList.add("active");
+        // Global variables for modal handling
+        let currentConfirmAction = null;
+        let currentConfirmFilename = '';
+
+        function showCustomConfirm(message, callback, filename) {
+            document.getElementById('confirmModal').style.display = 'block';
+            document.getElementById('confirm-message').textContent = message;
+            currentConfirmAction = callback;
+            currentConfirmFilename = filename;
         }
-        
-        // File Editor Functions
-        function saveFile() {
-            const filename = document.getElementById('filename').value.trim();
-            const content = document.getElementById('filecontent').value;
-            
-            if (!filename) {
-                showStatus('Please enter a filename', 'error');
-                return;
+
+        function confirmAction(isConfirmed) {
+            document.getElementById('confirmModal').style.display = 'none';
+            if (currentConfirmAction) {
+                currentConfirmAction(isConfirmed, currentConfirmFilename);
             }
-            
-            // Disable save button during operation
-            const saveBtn = event.target;
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-            
-            fetch('/save_file', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    filename: filename,
-                    content: content
+            currentConfirmAction = null;
+            currentConfirmFilename = '';
+        }
+        /*
+        function testButton() {
+            fetch('/test', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('result').textContent = result;
                 })
-            })
-            .then(response => response.text())
-            .then(data => {
-                if (filename.toLowerCase() === 'code.py') {
-                    showStatus('SUCCESS: code.py saved! Pico 2 W will reboot in 2 seconds to run new code...', 'warning');
-                    // Show countdown
-                    setTimeout(() => {
-                        showStatus('Rebooting now... Reconnect to PicoTest in a moment.', 'warning');
-                    }, 2000);
-                } else {
-                    showStatus('SUCCESS: File saved successfully: ' + filename, 'success');
-                }
-                console.log('File saved:', filename);
-            })
-            .catch(error => {
-                showStatus('ERROR: Error saving file: ' + error, 'error');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                // Re-enable save button
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save File';
-            });
-        }
-        
-        function loadFile() {
-            const filename = document.getElementById('filename').value.trim();
-            
-            if (!filename) {
-                showStatus('Please enter a filename to load', 'error');
-                return;
-            }
-            
-            fetch('/load_file', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({filename: filename})
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('File not found or error loading');
-                }
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('filecontent').value = data.content;
-                showStatus('SUCCESS: File loaded successfully: ' + filename, 'success');
-                console.log('File loaded:', filename);
-            })
-            .catch(error => {
-                showStatus('ERROR: Error loading file: ' + error, 'error');
-                console.error('Error:', error);
-            });
-        }
-        
-        function loadCodePy() {
-            document.getElementById('filename').value = 'code.py';
-            loadFile();
-        }
-        
-        function clearEditor() {
-            document.getElementById('filename').value = '';
-            document.getElementById('filecontent').value = '';
-            hideStatus();
-        }
-        
-        function showStatus(message, type) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = 'status ' + type;
-            status.style.display = 'block';
-            
-            // Auto-hide success messages after 5 seconds
-            if (type === 'success') {
-                setTimeout(hideStatus, 5000);
-            }
-        }
-        
-        function hideStatus() {
-            document.getElementById('status').style.display = 'none';
-        }
-        
-        // Console Monitor Functions
-        async function connectSerial() {
-            // Start polling for console updates
-            if (consoleUpdateInterval) {
-                clearInterval(consoleUpdateInterval);
-            }
-            
-            consoleUpdateInterval = setInterval(updateConsole, 500); // Update every 500ms
-            updateSerialStatus(true);
-            showSerialStatus('Console monitoring started', 'success');
-            
-            // Initial load
-            updateConsole();
-        }
-        
-        async function disconnectSerial() {
-            if (consoleUpdateInterval) {
-                clearInterval(consoleUpdateInterval);
-                consoleUpdateInterval = null;
-            }
-            
-            updateSerialStatus(false);
-            showSerialStatus('Console monitoring stopped', 'warning');
-        }
-        
-        async function updateConsole() {
-            try {
-                const response = await fetch('/get_console');
-                if (!response.ok) throw new Error('Failed to get console data');
-                
-                const consoleData = await response.json();
-                
-                // Only update if there's new content
-                if (consoleData.length !== lastConsoleLength) {
-                    const terminal = document.getElementById('terminal');
-                    
-                    // Build console text
-                    let consoleText = '';
-                    consoleData.forEach(entry => {
-                        consoleText += entry.message;
-                    });
-                    
-                    terminal.textContent = consoleText;
-                    terminal.scrollTop = terminal.scrollHeight;
-                    lastConsoleLength = consoleData.length;
-                }
-            } catch (error) {
-                showSerialStatus('Error updating console: ' + error.message, 'error');
-            }
-        }
-        
-        async function sendCommand() {
-            const input = document.getElementById('command-input');
-            const command = input.value.trim();
-            
-            if (!command) return;
-            
-            try {
-                await fetch('/send_command', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: command })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
                 });
-                
-                input.value = '';
-                // Force console update
-                setTimeout(updateConsole, 100);
-                
-            } catch (error) {
-                showSerialStatus('Error sending command: ' + error.message, 'error');
-            }
         }
-        
-        async function sendCtrlC() {
-            try {
-                print("=== INTERRUPT REQUESTED ===")
-                showSerialStatus('Interrupt signal sent', 'success');
-                setTimeout(updateConsole, 100);
-            } catch (error) {
-                showSerialStatus('Error sending interrupt: ' + error.message, 'error');
-            }
+        */
+        function runBlinky() {
+            fetch('/run-blinky', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('blinky-btn').textContent = result;
+                    document.getElementById('result').textContent = '';
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
         }
-        
-        function clearTerminal() {
-            document.getElementById('terminal').textContent = '';
+
+        function runMonitor() {
+            fetch('/run-monitor', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    document.getElementById('monitor-btn').textContent = result;
+                    if (result === 'Monitor Off') {
+                        document.getElementById('monitor-section').style.display = 'block';
+                        startMonitoring();
+                    } else {
+                        document.getElementById('monitor-section').style.display = 'none';
+                        stopMonitoring();
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                });
         }
-        
-        function handleCommandInput(event) {
-            if (event.key === 'Enter') {
-                sendCommand();
-            }
-        }
-        
-        function updateSerialStatus(connected) {
-            const statusDiv = document.getElementById('serial-status');
-            if (connected) {
-                statusDiv.textContent = 'Console Monitor: Active';
-                statusDiv.className = 'serial-status connected';
+
+        // NEW FUNCTION FOR HOTSPOT CONTROL
+        function toggleHotspotControl() {
+            const currentText = document.getElementById('hotspot-btn').textContent;
+            
+            if (currentText === 'Close Hotspot') {
+                // Show confirmation before closing
+                showCustomConfirm("Are you sure you want to close the Wi-Fi hotspot? A physical power cycle will be required to restart it.", (confirmed) => {
+                    if (confirmed) {
+                        fetch('/toggle-hotspot-control', { method: 'POST' })
+                            .then(response => response.text())
+                            .then(result => {
+                                document.getElementById('result').textContent = result;
+                                // Optionally disable all buttons here as the hotspot is going down
+                                const buttons = document.querySelectorAll('button');
+                                buttons.forEach(button => button.disabled = true);
+                            })
+                            .catch(error => {
+                                document.getElementById('result').textContent = 'Error: ' + error.message;
+                            });
+                    } else {
+                        document.getElementById('result').textContent = 'Hotspot closure cancelled.';
+                    }
+                });
             } else {
-                statusDiv.textContent = 'Console Monitor: Stopped';
-                statusDiv.className = 'serial-status disconnected';
+                // Keep hotspot open (disable timeout)
+                fetch('/toggle-hotspot-control', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(result => {
+                        document.getElementById('hotspot-btn').textContent = result;
+                        document.getElementById('result').textContent = 'Automatic timeout disabled. Hotspot will remain open.';
+                    })
+                    .catch(error => {
+                        document.getElementById('result').textContent = 'Error: ' + error.message;
+                    });
             }
         }
-        
-        function showSerialStatus(message, type) {
-            const status = document.getElementById('serial-status-msg');
-            status.textContent = message;
-            status.className = 'status ' + type;
-            status.style.display = 'block';
-            if (type === 'success') setTimeout(() => status.style.display = 'none', 3000);
+
+        let monitorInterval;
+
+        function startMonitoring() {
+            monitorInterval = setInterval(() => {
+                fetch('/get-console', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(result => {
+                        if (result.trim()) {
+                            const consoleDiv = document.getElementById('console-output');
+                            consoleDiv.innerHTML += result + '<br>';
+                            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+                        }
+                    })
+                    .catch(error => {
+                        console.log('Monitor fetch error:', error);
+                    });
+            }, 500);
         }
-        
-        // File Browser Functions
-        async function refreshFileList() {
-            try {
-                const response = await fetch('/list_files');
-                if (!response.ok) throw new Error('Failed to get file list');
-                
-                const files = await response.json();
-                displayFileList(files);
-                showBrowserStatus('File list refreshed', 'success');
-                
-            } catch (error) {
-                showBrowserStatus('Error refreshing files: ' + error.message, 'error');
+
+        function stopMonitoring() {
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
             }
         }
-        
-        function displayFileList(files) {
-            const fileListDiv = document.getElementById('file-list');
-            
-            if (files.length === 0) {
-                fileListDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No files found</div>';
-                return;
-            }
-            
-            // Clear the container first
-            fileListDiv.innerHTML = '';
-            
-            // Create file elements using DOM instead of innerHTML
-            files.forEach(file => {
-                const fileDiv = document.createElement('div');
-                fileDiv.style.cssText = 'padding: 8px 12px; margin: 2px 0; border-radius: 4px; cursor: pointer; background-color: white; border: 1px solid #ddd;';
-                
-                // Check if this file is selected
-                const isSelected = (window.selectedFile === file.name);
-                if (isSelected) {
-                    fileDiv.style.backgroundColor = '#4CAF50';
-                    fileDiv.style.color = 'white';
-                    fileDiv.style.border = 'none';
-                }
-                
-                fileDiv.innerHTML = `
-                    <strong>${file.name}</strong>
-                    <span style="float: right; color: ${isSelected ? '#fff' : '#666'};">
-                        ${file.size} bytes
-                    </span>`;
-                
-                // Add click handler
-                fileDiv.addEventListener('click', function() {
-                    window.selectedFile = file.name;
-                    refreshFileList(); // Refresh to show selection
+
+        function clearMonitor() {
+            document.getElementById('console-output').innerHTML = '';
+        }
+
+        function loadFileManager() {
+            fetch('/list-files', { method: 'POST' })
+                .then(response => response.text())
+                .then(result => {
+                    const lines = result.split('\n');
+                    if (lines[0].includes('Files found:')) {
+                        const files = lines.slice(2).filter(line => line.trim() !== '');
+                        document.getElementById('result').textContent = '';
+                        const fileListDiv = document.getElementById('file-list');
+                        const filesDiv = document.getElementById('files');
+                        filesDiv.innerHTML = '';
+                        files.forEach(filename => {
+                            const fileRow = document.createElement('div');
+                            fileRow.className = 'file-row';
+                            fileRow.textContent = filename;
+                            fileRow.onclick = () => selectFile(filename);
+                            filesDiv.appendChild(fileRow);
+                        });
+                        fileListDiv.style.display = 'block';
+                    } else {
+                        document.getElementById('result').textContent = result;
+                        document.getElementById('file-list').style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').textContent = 'Error: ' + error.message;
+                    document.getElementById('file-list').style.display = 'none';
                 });
-                
-                fileListDiv.appendChild(fileDiv);
-            });
         }
         
         function selectFile(filename) {
-            window.selectedFile = filename;
-            refreshFileList(); // Refresh to show selection
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/select-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                // These lines were commented out in the previous version, causing the issue.
+                // They are now re-enabled to show the Open/Delete buttons.
+                document.getElementById('open-btn').style.display = 'inline-block';
+                document.getElementById('delete-btn').style.display = 'inline-block';
+                document.getElementById('open-btn').setAttribute('data-filename', filename);
+                document.getElementById('delete-btn').setAttribute('data-filename', filename);
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
         }
         
-        async function loadSelectedFile() {
-            if (!window.selectedFile) {
-                showBrowserStatus('Please select a file first', 'error');
-                return;
-            }
+        function openSelectedFile() {
+            const filename = document.getElementById('open-btn').getAttribute('data-filename');
+            if (!filename) return;
             
-            // Switch to editor tab and load the file
-            document.getElementById('filename').value = window.selectedFile;
-            openTab({currentTarget: document.querySelector('.tab')}, 'editor');
-            loadFile();
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/open-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                const lines = result.split('\n');
+                const content = lines.slice(2).join('\n');
+                document.getElementById('file-editor').value = content;
+                document.getElementById('editor-title').textContent = `Editing: ${filename}`;
+                document.getElementById('editor-section').style.display = 'block';
+                document.getElementById('result').textContent = `Opened ${filename} in editor`;
+                document.getElementById('open-btn').style.display = 'none';
+                document.getElementById('delete-btn').style.display = 'none';
+                document.getElementById('file-list').style.display = 'none'; // Hide file list when editor opens
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
         }
         
-        async function deleteSelectedFile() {
-            if (!window.selectedFile) {
-                showBrowserStatus('Please select a file first', 'error');
-                return;
-            }
+        function saveFile() {
+            const filename = document.getElementById('editor-title').textContent.replace('Editing: ', '');
+            const content = document.getElementById('file-editor').value;
             
-            if (!confirm(`Are you sure you want to delete "${window.selectedFile}"?`)) {
-                return;
-            }
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('content', content);
             
-            try {
-                const response = await fetch('/delete_file', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: window.selectedFile })
-                });
-                
-                if (!response.ok) throw new Error('Failed to delete file');
-                
-                window.selectedFile = null;
-                refreshFileList();
-                showBrowserStatus('File deleted successfully', 'success');
-                
-            } catch (error) {
-                showBrowserStatus('Error deleting file: ' + error.message, 'error');
-            }
+            fetch('/save-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
         }
         
-        async function createNewFile() {
+        function closeEditor() {
+            document.getElementById('editor-section').style.display = 'none';
+            document.getElementById('result').textContent = 'Editor closed';
+            loadFileManager(); // Re-show file list after closing editor
+        }
+
+        // New function to show custom delete confirmation
+        function showDeleteConfirm() {
+            const filename = document.getElementById('delete-btn').getAttribute('data-filename');
+            if (!filename) return;
+            showCustomConfirm(`Are you sure you want to delete '${filename}'?`, (confirmed, fileToDelete) => {
+                if (confirmed) {
+                    deleteSelectedFileConfirmed(fileToDelete);
+                } else {
+                    document.getElementById('result').textContent = 'Deletion cancelled.';
+                }
+            }, filename);
+        }
+        
+        // Modified delete function to be called after confirmation
+        function deleteSelectedFileConfirmed(filename) {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/delete-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('deleted successfully')) {
+                    document.getElementById('open-btn').style.display = 'none';
+                    document.getElementById('delete-btn').style.display = 'none';
+                    loadFileManager(); // Refresh file list
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // ADD CREATE FILE FUNCTIONS USING EXACT SAME PATTERN AS WORKING BUTTONS
+        function showCreateFile() {
+            document.getElementById('create-file-section').style.display = 'block';
+            document.getElementById('new-filename').focus();
+            document.getElementById('result').textContent = '';
+        }
+
+        function hideCreateFile() {
+            document.getElementById('create-file-section').style.display = 'none';
+            document.getElementById('new-filename').value = '';
+        }
+
+        function createFile() {
             const filename = document.getElementById('new-filename').value.trim();
             
             if (!filename) {
-                showBrowserStatus('Please enter a filename', 'error');
+                document.getElementById('result').textContent = 'Please enter a filename';
                 return;
             }
             
-            try {
-                const response = await fetch('/create_file', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: filename })
-                });
-                
-                if (!response.ok) throw new Error('Failed to create file');
-                
-                document.getElementById('new-filename').value = '';
-                refreshFileList();
-                showBrowserStatus('File created successfully', 'success');
-                
-            } catch (error) {
-                showBrowserStatus('Error creating file: ' + error.message, 'error');
-            }
+            const formData = new FormData();
+            formData.append('filename', filename);
+            
+            fetch('/create-file', { 
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                document.getElementById('result').textContent = result;
+                if (result.includes('created successfully')) {
+                    hideCreateFile();
+                    loadFileManager();
+                }
+            })
+            .catch(error => {
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            });
         }
-        
-        function showBrowserStatus(message, type) {
-            const status = document.getElementById('browser-status');
-            status.textContent = message;
-            status.className = 'status ' + type;
-            status.style.display = 'block';
-            if (type === 'success') setTimeout(() => status.style.display = 'none', 3000);
+
+        // NEW FUNCTION TO CLOSE THE FILE LIST
+        function closeFileList() {
+            document.getElementById('file-list').style.display = 'none';
+            document.getElementById('result').textContent = 'File list closed.';
+            document.getElementById('open-btn').style.display = 'none'; // Hide open/delete buttons
+            document.getElementById('delete-btn').style.display = 'none';
         }
     </script>
 </body>

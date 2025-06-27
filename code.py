@@ -1,611 +1,624 @@
 """
-Pico 2 W Hotspot File Editor + Interactive REPL + Serial Monitor with Non-blocking LED Control
-============================================================================================
- 
-Complete web-based CircuitPython development environment with file editing,
-interactive REPL, serial monitor functionality, and non-blocking LED operations.
+Picowide - Raspberry Pi Pico 2 W Web-based Development Environment
 
-Features:
-- Creates WiFi hotspot "PicoTest" 
-- Serves file editor at http://192.168.4.1
-- Interactive REPL console with code execution
-- Load and save files through web interface
-- FILE BROWSER: List and select files in the root directory
-- Auto-reboot when code.py is saved (enables live development)
-- Send commands and see live console output
-- Non-blocking LED blink control via web interface
-- Variable inspection and namespace management
+This module creates a WiFi hotspot and serves a web-based file editor interface
+for developing directly on the Pico 2 W. It provides a complete IDE accessible
+from any device connected to the Pico's WiFi network.
 
-Hardware Requirements:
-- Raspberry Pi Pico 2 W (RP2350)
+Core Features:
+    - WiFi Access Point creation
+    - Web-based file manager with CRUD operations
+    - Real-time file editing through browser interface
+    - Mobile-friendly responsive design
 
-Software Requirements:
-- CircuitPython 9.2.7 or later
-- adafruit_httpserver library
-- No additional libraries needed!
+Technical Implementation:
+    - Backend: CircuitPython with adafruit_httpserver
+    - Frontend: Vanilla HTML/CSS/JavaScript
+    - Access: Connect to "Picowide" WiFi → Navigate to 192.168.4.1
 
-Usage:
-1. Upload this code as code.py to CIRCUITPY drive
-2. Upload index.html and styles.css to CIRCUITPY drive
-3. Connect to "PicoTest" WiFi network (no password)
-4. Open browser to http://192.168.4.1
-5. Use interactive REPL to execute Python commands
-6. Use LED Control button to start/stop blinking
-7. Use file browser to select and load files
-8. Use file editor to load/save files
-9. Saving code.py automatically reboots Pico for testing
-
-Author: CircuitPython Interactive Development Environment
-License: MIT License
-Version: 2.4 - FIXED LED CONTROL ENDPOINT
+Author: Picowide Project
+Version: 1.09 (Modified for FOSS release - with password)
+License: MIT
 """
 
-import time
-import json
 import wifi
 import socketpool
 import ipaddress
+import os
 import board
 import digitalio
-import gc
-import os
+import time
 from adafruit_httpserver import Server, Request, Response
+import gc # Added for memory management
 
-# Configuration
-HOTSPOT_SSID = "PicoTest"
-HOTSPOT_IP = "192.168.4.1"
-HOTSPOT_NETMASK = "255.255.255.0"
-HOTSPOT_GATEWAY = "192.168.4.1"
-
-# Global variables for scheduled reboot and console monitoring
-reboot_scheduled = 0
-console_buffer = []
-max_buffer_size = 1000
-
-# REPL globals for maintaining execution context
-repl_globals = {'__name__': '__main__'}
-repl_locals = {}
-command_history = []
-max_history = 100
-
-# LED setup and blink control
-led = None
-led_blink_enabled = False
-led_last_toggle = 0
-led_blink_interval = 0.5  # 500ms blink interval
-
-# Try multiple ways to initialize the LED
+# --- NEW: Config Import ---
 try:
-    if hasattr(board, 'LED'):
-        led = digitalio.DigitalInOut(board.LED)
-        led.switch_to_output(value=False)
-        print("LED initialized using board.LED")
-    elif hasattr(board, 'GP25'):
-        # Fallback for Pico 2 W - LED is often on GP25
-        led = digitalio.DigitalInOut(board.GP25)
-        led.switch_to_output(value=False)
-        print("LED initialized using board.GP25")
-    else:
-        print("Warning: No LED pin found")
-except Exception as e:
-    print(f"LED initialization error: {e}")
-    led = None
+    import config
+except ImportError:
+    print("config.py not found. Using default values for power saving.")
+    class Config:
+        WIFI_AP_TIMEOUT_MINUTES = 10  # Default timeout in minutes if config.py is missing
+    config = Config()
 
-def add_to_console(message):
-    """Add message to console buffer."""
-    global console_buffer
-    
-    console_buffer.append({
-        'time': time.monotonic(),
-        'message': str(message) + '\n'
-    })
-    
-    # Limit buffer size
-    if len(console_buffer) > max_buffer_size:
-        console_buffer = console_buffer[-max_buffer_size:]
+# =============================================================================
+# CORE SYSTEM SETUP
+# =============================================================================
 
-def execute_code(code_string):
-    """Execute Python code and return result, output, and any errors."""
-    global repl_globals, repl_locals
-    
-    result = None
-    error = None
-    output = ""
-    
-    # Create a custom print function that captures output
-    captured_prints = []
-    
-    def capture_print(*args, **kwargs):
-        # Convert all arguments to strings and join them
-        text = ' '.join(str(arg) for arg in args)
-        captured_prints.append(text)
-    
-    # Add our custom print to the execution environment
-    repl_globals['print'] = capture_print
-    
-    try:
-        # Try to eval first (for expressions)
-        try:
-            result = eval(code_string, repl_globals, repl_locals)
-        except SyntaxError:
-            # If eval fails, try exec (for statements)
-            exec(code_string, repl_globals, repl_locals)
-            result = None
-            
-    except Exception as e:
-        error = f"{type(e).__name__}: {str(e)}"
-    
-    finally:
-        # Restore original print function (built-in)
-        if 'print' in repl_globals:
-            del repl_globals['print']
-    
-    # Join captured print statements
-    if captured_prints:
-        output = '\n'.join(captured_prints)
-    
-    return result, output, error
+# Create WiFi hotspot with a password
+# For community release, this password should be clearly documented and/or changeable.
+# For security in deployment, use a strong, unique password.
+wifi.radio.start_ap(ssid="Picowide", password="simpletest")
+wifi.radio.set_ipv4_address_ap(
+    ipv4=ipaddress.IPv4Address("192.168.4.1"),
+    netmask=ipaddress.IPv4Address("255.255.255.0"),
+    gateway=ipaddress.IPv4Address("192.168.4.1")
+)
 
-def update_led():
-    """Non-blocking LED update - call this frequently in main loop."""
-    global led_last_toggle
-    
-    if led is None or not led_blink_enabled:
-        return
-    
-    current_time = time.monotonic()
-    if current_time - led_last_toggle >= led_blink_interval:
-        led.value = not led.value
-        led_last_toggle = current_time
-        status = 'ON' if led.value else 'OFF'
-        print(f"LED: {status}")
-        add_to_console(f"LED: {status}")
-
-def create_hotspot():
-    """Create WiFi hotspot for serving the editor interface."""
-    print("=== PICO 2 W INTERACTIVE DEVELOPMENT ENVIRONMENT ===")
-    add_to_console("=== PICO 2 W INTERACTIVE DEVELOPMENT ENVIRONMENT ===")
-    print("Creating hotspot...")
-    add_to_console("Creating hotspot...")
-    
-    try:
-        # Create open WiFi hotspot
-        wifi.radio.start_ap(ssid=HOTSPOT_SSID)
-        
-        # Configure IP addressing
-        wifi.radio.set_ipv4_address_ap(
-            ipv4=ipaddress.IPv4Address(HOTSPOT_IP),
-            netmask=ipaddress.IPv4Address(HOTSPOT_NETMASK), 
-            gateway=ipaddress.IPv4Address(HOTSPOT_GATEWAY)
-        )
-        
-        message = f"SUCCESS: Hotspot created: {HOTSPOT_SSID}"
-        print(message)
-        add_to_console(message)
-        message = f"SUCCESS: IP Address: {HOTSPOT_IP}"
-        print(message)
-        add_to_console(message)
-        message = "SUCCESS: Security: Open (no password)"
-        print(message)
-        add_to_console(message)
-        return True
-        
-    except Exception as e:
-        message = f"FAILED to create hotspot: {e}"
-        print(message)
-        add_to_console(message)
-        return False
-
-# Initialize REPL environment with useful modules
-def init_repl_environment():
-    """Initialize REPL with common imports and variables."""
-    global repl_globals
-    
-    # Add common modules to REPL environment
-    repl_globals.update({
-        'board': board,
-        'digitalio': digitalio,
-        'time': time,
-        'gc': gc,
-        'os': os,
-        'led': led,
-        'console_buffer': console_buffer,
-        'add_to_console': add_to_console
-    })
-    
-    add_to_console("REPL initialized with: board, digitalio, time, gc, os, led, console_buffer, add_to_console")
-
-# Create hotspot
-if not create_hotspot():
-    print("Cannot continue without hotspot. Exiting.")
-    raise SystemExit
-
-# Initialize REPL environment
-init_repl_environment()
-
-# Initialize HTTP server
+# Initialize server
 pool = socketpool.SocketPool(wifi.radio)
 server = Server(pool, "/", debug=False)
 
+# --- NEW/MODIFIED: WiFi Timeout Variables and Activity Tracker ---
+last_activity_time = time.monotonic()
+WIFI_TIMEOUT_SECONDS = config.WIFI_AP_TIMEOUT_MINUTES * 60
+last_timeout_check_log_time = time.monotonic() # For periodic + logging
+ap_is_off_and_logged = False # NEW: Flag to prevent repeated shutdown messages after AP is off
+timeout_disabled = False # NEW: Flag to disable automatic timeout when user takes control
+
+def shut_down_wifi_and_sleep(sleep_duration=None):
+    """
+    Shuts down the Wi-Fi Access Point and optionally puts the board to sleep.
+    If sleep_duration is None, it means a permanent low-power state requiring
+    a physical power cycle to restart the hotspot.
+    """
+    # This function now assumes the caller (check_wifi_timeout or power_save_mode)
+    # has determined that a shutdown is needed and not already logged.
+    console_print("Initiating Wi-Fi shutdown and power saving mode...")
+    if wifi.radio.enabled: # Only call stop_ap if it's currently enabled
+        wifi.radio.stop_ap()
+        console_print("Wi-Fi AP shut down.")
+    else:
+        # This branch should ideally not be hit if ap_is_off_and_logged logic works,
+        # but kept for robustness.
+        console_print("Wi-Fi AP already off (or never started).")
+
+    # MODIFIED: Remove sleep functionality to allow other Pico operations to continue
+    if sleep_duration is not None:
+        console_print(f"Light sleep disabled - Pico continues other operations.")
+    else:
+        console_print("Wi-Fi shutdown complete. Other Pico operations continue. Requires physical power cycle to restart hotspot.")
+
+
+def check_wifi_timeout():
+    """
+    Checks if the Wi-Fi AP has timed out due to inactivity and shuts it down.
+    Provides periodic console output only when AP is active.
+    """
+    global last_activity_time, last_timeout_check_log_time, ap_is_off_and_logged, timeout_disabled
+    
+    # NEW: Skip timeout logic entirely if user has disabled automatic timeout
+    if timeout_disabled:
+        return
+    
+    current_time = time.monotonic()
+
+    # If Wi-Fi AP is currently enabled
+    if wifi.radio.enabled:
+        # Log periodic checks every few seconds
+        if (current_time - last_timeout_check_log_time >= min(10, WIFI_TIMEOUT_SECONDS / 2 if WIFI_TIMEOUT_SECONDS > 20 else 1)):
+            elapsed_time = round(current_time - last_activity_time, 1)
+            remaining_time = round(WIFI_TIMEOUT_SECONDS - elapsed_time, 1)
+            console_print(f"Wi-Fi AP active. Inactivity: {elapsed_time}s / Remaining: {remaining_time}s")
+            last_timeout_check_log_time = current_time
+
+        # Check if timeout has occurred AND we haven't already logged the shutdown for this state
+        if (current_time - last_activity_time > WIFI_TIMEOUT_SECONDS) and not ap_is_off_and_logged:
+            console_print(f"--- Wi-Fi AP timed out after {config.WIFI_AP_TIMEOUT_MINUTES} minutes of inactivity. ---")
+            shut_down_wifi_and_sleep() # Call the common shutdown function
+            ap_is_off_and_logged = True # IMPORTANT: Set flag AFTER shutdown is triggered and logged
+    elif not wifi.radio.enabled and not ap_is_off_and_logged:
+        # This branch ensures that if the AP was manually turned off,
+        # or if the board started without AP enabled, it logs its status once.
+        # However, for our timeout/button case, ap_is_off_and_logged will be set to True
+        # by the shutdown process, so this specific block will mostly serve
+        # if there's a unique unlogged "AP off" state.
+        console_print("Wi-Fi AP is currently off (and status not yet logged this cycle).")
+        ap_is_off_and_logged = True
+
+
+# =============================================================================
+# BLINKY FUNCTIONALITY SECTION
+# =============================================================================
+# This section can be removed when creating stripped-down versions for
+# other projects. All LED blinky functionality is contained here.
+
+# Configurable blink interval (seconds)
+BLINK_INTERVAL = 0.25
+
+# Setup LED
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+
+# Blink timing
+last_blink = time.monotonic()
+led_state = False
+blinky_enabled = False
+
+# Console monitoring
+monitor_enabled = False
+console_buffer = []
+
+def console_print(message):
+    """
+    Add a message to the console buffer for web monitoring.
+    
+    :param str message: Message to add to console output
+    :return: None
+    :rtype: None
+    """
+    global console_buffer
+    # Always print to serial console for debugging purposes
+    print(f"[PicoWide]: {message}") 
+    if monitor_enabled:
+        console_buffer.append(message)
+        # Keep buffer size manageable
+        if len(console_buffer) > 100:
+            console_buffer = console_buffer[-50:]
+
+def update_blinky():
+    """
+    Update the LED blinky state based on timing interval.
+    
+    This function manages the onboard LED blinking pattern by checking
+    if enough time has elapsed since the last blink and toggling the
+    LED state accordingly. Only blinks when blinky_enabled is True.
+    Called from the main loop.
+    
+    Global Variables:
+        last_blink (float): Timestamp of last LED state change
+        led_state (bool): Current LED state (True=on, False=off)
+        blinky_enabled (bool): Whether blinking is currently active
+        BLINK_INTERVAL (float): Time between blinks in seconds
+    
+    :return: None
+    :rtype: None
+    """
+    global last_blink, led_state
+    
+    if not blinky_enabled:
+        led.value = False  # Ensure LED is off when blinky is disabled
+        return
+        
+    current_time = time.monotonic()
+    
+    if current_time - last_blink >= BLINK_INTERVAL:
+        led_state = not led_state
+        led.value = led_state
+        last_blink = current_time
+        
+        # Add console output for monitoring
+        status = "LED ON" if led_state else "LED OFF"
+        #console_print(status) # Uncomment to show each on/off cycle on the console
+        # console_print(status) # Removed to avoid spamming console during timeout test
+
+# =============================================================================
+# BASE ROUTES (Core functionality - always needed)
+# =============================================================================
+
 @server.route("/")
-def editor_page(request: Request):
-    """Serve the main index.html page."""
-    print("IDE page requested")
-    try:
-        with open("index.html", "r") as f:
-            html_content = f.read()
-        return Response(request, html_content, content_type="text/html")
-    except OSError:
-        return Response(request, "index.html not found", content_type="text/plain")
+def serve_index(request: Request):
+    """
+    Serve the main HTML interface.
+    
+    :param Request request: The HTTP request object
+    :return: HTML response containing the web interface
+    :rtype: Response
+    """
+    with open("index.html", "r") as f:
+        return Response(request, f.read(), content_type="text/html")
 
 @server.route("/styles.css")
-def serve_css(request: Request):
-    """Serve the CSS file."""
-    try:
-        with open("styles.css", "r") as f:
-            css_content = f.read()
-        return Response(request, css_content, content_type="text/css")
-    except OSError:
-        return Response(request, "styles.css not found", content_type="text/plain")
-
-@server.route("/<filename>")
-def serve_file(request: Request, filename: str):
-    """Serve any file from the root directory."""
-    try:
-        # Determine content type based on file extension
-        if filename.endswith('.html'):
-            content_type = "text/html"
-        elif filename.endswith('.css'):
-            content_type = "text/css"
-        elif filename.endswith('.js'):
-            content_type = "application/javascript"
-        elif filename.endswith('.json'):
-            content_type = "application/json"
-        else:
-            content_type = "text/plain"
-        
-        print(f"Serving file: {filename}")
-        with open(filename, "r") as f:
-            file_content = f.read()
-        return Response(request, file_content, content_type=content_type)
-    except OSError:
-        print(f"File not found: {filename}")
-        return Response(request, f"File not found: {filename}", content_type="text/plain")
-
-@server.route("/list_files")
-def list_files(request: Request):
-    """List files in the root directory."""
-    try:
-        # Get directory listing
-        files = []
-        
-        # List files in root directory
-        file_list = os.listdir("/")
-        
-        for filename in file_list:
-            try:
-                # Get file info
-                stat_info = os.stat("/" + filename)
-                
-                # Check if it's a file or directory
-                # For CircuitPython, stat()[0] contains the file mode
-                # 0x8000 bit indicates regular file
-                is_file = (stat_info[0] & 0x8000) != 0
-                
-                file_info = {
-                    'name': filename,
-                    'is_file': is_file,
-                    'size': stat_info[6] if is_file else 0,  # File size
-                    'modified': stat_info[8]  # Modification time
-                }
-                files.append(file_info)
-                
-            except OSError:
-                # If we can't stat the file, just add basic info
-                files.append({
-                    'name': filename,
-                    'is_file': True,
-                    'size': 0,
-                    'modified': 0
-                })
-        
-        # Sort files: directories first, then files, both alphabetically
-        files.sort(key=lambda x: (x['is_file'], x['name'].lower()))
-        
-        print(f"SUCCESS: Listed {len(files)} files")
-        return Response(request, json.dumps(files), content_type="application/json")
-        
-    except Exception as e:
-        error_msg = f"Error listing files: {e}"
-        print(f"ERROR: {error_msg}")
-        return Response(request, json.dumps({"error": error_msg}), content_type="application/json")
-
-@server.route("/save_file", methods=["POST"])
-def save_file(request: Request):
-    """Save file to filesystem with auto-reboot for code.py."""
-    global reboot_scheduled
+def serve_styles(request: Request):
+    """
+    Serve the CSS stylesheet.
     
-    try:
-        data = json.loads(request.body)
-        filename = data.get("filename", "").strip()
-        content = data.get("content", "")
-        
-        if not filename:
-            return Response(request, "Filename required", content_type="text/plain")
-        
-        # Ensure filename doesn't start with / (we're saving to root)
-        if filename.startswith('/'):
-            filename = filename[1:]
-        
-        print(f"Saving file: {filename} ({len(content)} characters)")
-        add_to_console(f"Saving file: {filename} ({len(content)} characters)")
-        
-        # Write file to filesystem
-        with open(filename, 'w') as f:
-            f.write(content)
-        
-        print(f"SUCCESS: File saved: {filename}")
-        add_to_console(f"SUCCESS: File saved: {filename}")
-        
-        # Auto-reboot for code.py to enable live development
-        if filename.lower() == "code.py":
-            print("REBOOT: code.py saved - scheduling reboot in 2 seconds...")
-            add_to_console("REBOOT: code.py saved - scheduling reboot in 2 seconds...")
-            reboot_scheduled = time.monotonic() + 2
-            return Response(request, f"File saved: {filename} - Rebooting to apply changes...", content_type="text/plain")
-        else:
-            return Response(request, f"File saved: {filename}", content_type="text/plain")
-        
-    except Exception as e:
-        error_msg = f"Error saving file: {e}"
-        print(f"ERROR: {error_msg}")
-        add_to_console(f"ERROR: {error_msg}")
-        return Response(request, error_msg, content_type="text/plain")
+    :param Request request: The HTTP request object
+    :return: CSS response containing styling information
+    :rtype: Response
+    """
+    with open("styles.css", "r") as f:
+        return Response(request, f.read(), content_type="text/css")
 
-@server.route("/load_file", methods=["POST"])
-def load_file(request: Request):
-    """Load file from filesystem."""
-    try:
-        data = json.loads(request.body)
-        filename = data.get("filename", "").strip()
-        
-        if not filename:
-            return Response(request, "Filename required", content_type="text/plain")
-        
-        print(f"Loading file: {filename}")
-        
-        try:
-            with open(filename, 'r') as f:
-                content = f.read()
-        except OSError:
-            print(f"ERROR: File not found: {filename}")
-            return Response(request, "File not found", content_type="text/plain")
-        
-        print(f"SUCCESS: File loaded: {filename} ({len(content)} characters)")
-        response_data = {"content": content}
-        return Response(request, json.dumps(response_data), content_type="application/json")
-        
-    except Exception as e:
-        error_msg = f"Error loading file: {e}"
-        print(f"ERROR: {error_msg}")
-        return Response(request, error_msg, content_type="text/plain")
+"""
+Commented out test button code here and in index.html
+"""
+#@server.route("/test", methods=["POST"])
+#def test_button(request: Request):
+#   """
+#   Handle test button functionality to verify connection.
+#    
+#    :param Request request: The HTTP request object
+#   :return: Plain text response confirming functionality
+#   :rtype: Response
+#   """
+#   return Response(request, "Button works!", content_type="text/plain")
 
-@server.route("/get_console")
-def get_console(request: Request):
-    """Get console output for web display."""
-    try:
-        return Response(request, json.dumps(console_buffer), content_type="application/json")
-    except Exception as e:
-        return Response(request, f"Error getting console: {e}", content_type="text/plain")
-
-@server.route("/execute_command", methods=["POST"])
-def execute_command(request: Request):
-    """Execute REPL command and return result."""
-    global command_history
+@server.route("/run-blinky", methods=["POST"])
+def run_blinky(request: Request):
+    """
+    Handle LED blinky functionality toggle.
     
+    This route toggles the LED blinking pattern on/off when called from
+    the web interface. Returns the next action text for the button.
+    
+    :param Request request: The HTTP request object
+    :return: Next button action text ("Blinky On" or "Blinky Off")
+    :rtype: Response
+    """
+    global blinky_enabled
     try:
-        data = json.loads(request.body)
-        command = data.get("command", "").strip()
-        
-        if not command:
-            return Response(request, json.dumps({"error": "No command provided"}), content_type="application/json")
-        
-        # Add to command history
-        if command not in command_history:
-            command_history.append(command)
-            if len(command_history) > max_history:
-                command_history = command_history[-max_history:]
-        
-        # Add command to console
-        add_to_console(f">>> {command}")
-        
-        # Execute the command
-        result, output, error = execute_code(command)
-        
-        # Add output to console
-        if output:
-            add_to_console(output.rstrip())
-        
-        if error:
-            add_to_console(f"ERROR: {error}")
-        elif result is not None:
-            add_to_console(repr(result))
-        
-        # Return response
-        response_data = {
-            "result": repr(result) if result is not None else None,
-            "output": output,
-            "error": error
+        blinky_enabled = not blinky_enabled
+        next_action = "Blinky Off" if blinky_enabled else "Blinky On"
+        console_print("Blinky on" if blinky_enabled else "Blinky off")        
+        return Response(request, next_action, content_type="text/plain")
+    except Exception as e:
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+# --- NEW: Hotspot Control Route ---
+@server.route("/toggle-hotspot-control", methods=["POST"])
+def toggle_hotspot_control(request: Request):
+   """
+   Handles requests to toggle between keeping hotspot open and immediate shutdown.
+   When timeout is disabled, provides immediate shutdown option.
+   When timeout is enabled, disables timeout and keeps hotspot open.
+   """
+   global timeout_disabled, ap_is_off_and_logged
+   
+   if not timeout_disabled:
+       # User wants to keep hotspot open (disable timeout)
+       timeout_disabled = True
+       console_print("Automatic timeout disabled. Hotspot will remain open until manually closed.")
+       return Response(request, "Close Hotspot", content_type="text/plain")
+   else:
+       # User wants to close hotspot immediately
+       console_print("Received request to close hotspot immediately.")
+       shut_down_wifi_and_sleep()
+       ap_is_off_and_logged = True
+       return Response(request, "Hotspot closed. Physical power cycle needed to restart.", content_type="text/plain")
+
+# --- LEGACY: Power Save Route (kept for compatibility) ---
+@server.route("/power-save", methods=["POST"])
+def power_save_mode(request: Request):
+    """
+    Handles requests to enter power-saving mode.
+    Shuts down Wi-Fi AP and signals a permanent low-power state.
+    Requires a physical power cycle to restart the hotspot.
+    """
+    global ap_is_off_and_logged
+    if not ap_is_off_and_logged: # Only log manual shutdown once
+        console_print("Received request to enter power-save mode.")
+        shut_down_wifi_and_sleep()
+        ap_is_off_and_logged = True # Set flag after manual shutdown is triggered and logged
+    return Response(request, "Power saving mode activated. Wi-Fi AP shut down. Physical power cycle needed to restart.", content_type="text/plain")
+
+# =============================================================================
+# FILE MANAGEMENT SECTION
+# =============================================================================
+# This section can be removed when creating stripped-down versions for
+# other projects. All file management functionality is contained here.
+
+def list_all_files():
+    """
+    List all files in the CIRCUITPY root directory.
+    
+    This function scans the root filesystem and returns a list of all
+    files and directories present. It handles OSError exceptions that
+    may occur during filesystem access.
+    
+    :return: List of filenames found in root directory
+    :rtype: list[str]
+    
+    Example:
+        >>> files = list_all_files()
+        >>> print(files)
+        ['code.py', 'index.html', 'styles.css', 'secrets.py']
+    """
+    files = []
+    try:
+        for file in os.listdir("/"):
+            files.append(file)
+    except OSError:
+        pass
+    return files
+
+def get_file_info(filename):
+    """
+    Get detailed information about a specific file.
+    
+    :param str filename: Name of the file to inspect
+    :return: Dictionary containing file information or None if file doesn't exist
+    :rtype: dict or None
+    
+    Example:
+        >>> info = get_file_info("code.py")
+        >>> print(info)
+        {'name': 'code.py', 'size': 1234, 'type': 'file'}
+    """
+    try:
+        stat = os.stat(filename)
+        return {
+            "name": filename,
+            "size": stat[6],  # st_size
+            "type": "directory" if stat[0] & 0x4000 else "file"
         }
-        
-        return Response(request, json.dumps(response_data), content_type="application/json")
-        
-    except Exception as e:
-        error_msg = f"Error executing command: {e}"
-        print(f"ERROR: {error_msg}")
-        add_to_console(f"SYSTEM ERROR: {error_msg}")
-        return Response(request, json.dumps({"error": error_msg}), content_type="application/json")
+    except OSError:
+        return None
 
-@server.route("/get_variables")
-def get_variables(request: Request):
-    """Get current REPL variables for inspection."""
-    try:
-        # Get user-defined variables (exclude built-ins)
-        user_vars = {}
-        for name, value in repl_locals.items():
-            if not name.startswith('_'):
-                try:
-                    user_vars[name] = repr(value)
-                except:
-                    user_vars[name] = f"<{type(value).__name__}>"
-        
-        # Add some key globals
-        for name in ['led', 'led_blink_enabled']:
-            if name in repl_globals:
-                try:
-                    user_vars[name] = repr(repl_globals[name])
-                except:
-                    user_vars[name] = f"<{type(repl_globals[name]).__name__}>"
-        
-        return Response(request, json.dumps(user_vars), content_type="application/json")
-        
-    except Exception as e:
-        return Response(request, f"Error getting variables: {e}", content_type="text/plain")
-
-@server.route("/get_history")
-def get_history(request: Request):
-    """Get command history."""
-    try:
-        return Response(request, json.dumps(command_history[-20:]), content_type="application/json")  # Last 20 commands
-    except Exception as e:
-        return Response(request, f"Error getting history: {e}", content_type="text/plain")
-
-@server.route("/clear_console", methods=["POST"])
-def clear_console(request: Request):
-    """Clear the console buffer."""
-    global console_buffer
+@server.route("/list-files", methods=["POST"])
+def list_files(request: Request):
+    """
+    Handle file listing requests from the web interface.
     
-    try:
-        console_buffer = []
-        add_to_console("Console cleared by user")
-        print("Console buffer cleared")
-        return Response(request, "Console cleared", content_type="text/plain")
-        
-    except Exception as e:
-        error_msg = f"Error clearing console: {e}"
-        print(f"ERROR: {error_msg}")
-        return Response(request, error_msg, content_type="text/plain")
-
-@server.route("/led_control", methods=["POST"])
-def led_control(request: Request):
-    """Toggle LED blinking on/off."""
-    global led_blink_enabled
+    This route processes POST requests to list all files in the root
+    directory. It formats the response as a plain text list suitable
+    for parsing by the JavaScript frontend.
     
+    :param Request request: The HTTP request object
+    :return: Plain text response with file listing
+    :rtype: Response
+    
+    Response Format:
+        Files found:
+        
+        filename1.py
+        filename2.html
+        filename3.css
+    """
+    print("Handling list files request")
+    all_files = list_all_files()
+    
+    if all_files:
+        # Format files as a single column, one per line
+        file_list = "\n".join(all_files)
+        response_body = f"Files found:\n\n{file_list}"
+    else:
+        response_body = "No files found in CIRCUITPY root directory."
+    
+    return Response(request, response_body, content_type="text/plain")
+
+@server.route("/select-file", methods=["POST"])
+def select_file(request: Request):
+    """
+    Handle file selection requests.
+    
+    This route processes file selection from the web interface file list.
+    It receives the filename via form data and prepares it for opening.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Confirmation message with selected filename
+    :rtype: Response
+    
+    Form Data Expected:
+        - filename: Name of the selected file
+    """
     try:
-        # Get the raw request data and decode it
-        raw_text = request.raw_request.decode("utf8")
-        print(f"LED control raw request: {raw_text}")
-        add_to_console(f"LED control request received: {len(raw_text)} bytes")
-        
-        if led is None:
-            return Response(request, "LED not available on this device", content_type="text/plain")
-        
-        # Try to parse as JSON first
-        action = ""
-        try:
-            data = json.loads(request.body)
-            action = data.get("action", "").strip().lower()
-            print(f"Parsed JSON action: {action}")
-        except:
-            # Fallback: extract action from the raw text
-            if '"action":"on"' in raw_text or '"action": "on"' in raw_text or "action=on" in raw_text:
-                action = "on"
-            elif '"action":"off"' in raw_text or '"action": "off"' in raw_text or "action=off" in raw_text:
-                action = "off"
-            print(f"Extracted action from raw text: {action}")
-        
-        if action == "on":
-            led_blink_enabled = True
-            message = "LED blinking started"
-            print(message)
-            add_to_console(message)
-            
-        elif action == "off":
-            led_blink_enabled = False
-            # Turn LED off immediately when stopping
-            if led is not None:
-                led.value = False
-            message = "LED blinking stopped"
-            print(message)
-            add_to_console(message)
+        # Get the filename from form data
+        filename = request.form_data.get('filename', '')
+        if filename:
+            return Response(request, f"Open '{filename}'?", content_type="text/plain")
         else:
-            error_msg = f"Invalid action '{action}'. Use 'on' or 'off'"
-            print(error_msg)
-            add_to_console(error_msg)
-            return Response(request, error_msg, content_type="text/plain")
-        
-        response_msg = f"LED blink {action}"
-        print(f"Sending response: {response_msg}")
-        return Response(request, response_msg, content_type="text/plain")
-        
+            return Response(request, "No file selected", content_type="text/plain")
     except Exception as e:
-        error_msg = f"Error toggling LED: {e}"
-        print(f"ERROR: {error_msg}")
-        add_to_console(f"ERROR: {error_msg}")
-        return Response(request, error_msg, content_type="text/plain")
+        print(f"Error in select_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
-# Start server in cooperative multitasking mode
-print("Starting web server with cooperative multitasking...")
-server.start(HOTSPOT_IP, port=80)
-
-print("\n" + "="*60)
-print("INTERACTIVE DEVELOPMENT ENVIRONMENT READY:")
-print("="*60)
-print(f"1. Connect to WiFi: '{HOTSPOT_SSID}' (no password)")
-print(f"2. Open browser: http://{HOTSPOT_IP}")
-print("3. Use Interactive REPL console to execute Python commands")
-print("4. Use LED Control button to start/stop blinking")
-print("5. Use File Browser to list and select files")
-print("6. All operations are non-blocking using cooperative multitasking!")
-print("="*60)
-print(f"\nLED Status: {'Available' if led is not None else 'Not available'}")
-print("Interactive REPL Environment Ready!")
-print("Execute commands → View variables → Control hardware → Browse files → No blocking!")
-
-# Main cooperative multitasking loop
-last_status_report = 0
-status_report_interval = 60  # Report status every 60 seconds (reduced from 10)
-
-while True:
+@server.route("/open-file", methods=["POST"])
+def open_file(request: Request):
+    """
+    Handle file opening requests for editing.
+    
+    This route reads the contents of a specified file and returns it
+    for display in the web-based editor. It handles file reading errors
+    gracefully and provides appropriate error messages.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: File contents formatted for editor or error message
+    :rtype: Response
+    
+    Form Data Expected:
+        - filename: Name of the file to open
+        
+    Response Format:
+        File: filename.py
+        
+        [file contents here]
+    """
     try:
-        # Check for scheduled reboot
-        if reboot_scheduled > 0 and time.monotonic() >= reboot_scheduled:
-            import microcontroller
-            print("REBOOT: Executing scheduled reboot...")
-            microcontroller.reset()
-        
-        # Handle web requests (non-blocking)
-        server.poll()
-        
-        # Update LED (non-blocking)
-        update_led()
-        
-        # Periodic status reporting (much less frequent now)
-        current_time = time.monotonic()
-        if current_time - last_status_report >= status_report_interval:
-            # Only report to print, not to console buffer
-            print(f"System running: LED {'ENABLED' if led_blink_enabled else 'DISABLED'}, Free memory: {gc.mem_free()} bytes, REPL vars: {len(repl_locals)}")
-            last_status_report = current_time
-        
-        # Small delay to prevent overwhelming the CPU
-        time.sleep(0.001)  # 1ms delay for cooperative yielding
-        
-    except KeyboardInterrupt:
-        print("\nServer stopped by user")
-        break
+        # Get the filename from form data
+        filename = request.form_data.get('filename', '')
+        if filename:
+            # Read the file content
+            try:
+                with open(filename, 'r') as f:
+                    content = f.read()
+                return Response(request, f"File: {filename}\n\n{content}", content_type="text/plain")
+            except OSError:
+                return Response(request, f"Error: Could not read file '{filename}'", content_type="text/plain")
+        else:
+            return Response(request, "No file specified", content_type="text/plain")
     except Exception as e:
-        print(f"ERROR: Server error: {e}")
-        add_to_console(f"ERROR: Server error: {e}")
-        time.sleep(1)
+        print(f"Error in open_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
-print("Goodbye!")
+@server.route("/run-monitor", methods=["POST"])
+def run_monitor(request: Request):
+    """
+    Handle console monitor functionality toggle.
+    
+    This route toggles the console monitoring on/off when called from
+    the web interface.
+    
+    :param Request request: The HTTP request object
+    :return: Next button action text ("Monitor On" or "Monitor Off")
+    :rtype: Response
+    """
+    global monitor_enabled
+    try:
+        monitor_enabled = not monitor_enabled
+        next_action = "Monitor Off" if monitor_enabled else "Monitor On"
+        if monitor_enabled:
+            console_print("Console monitoring started")
+        else:
+            global console_buffer
+            console_buffer = []  # Clear buffer when stopping
+        return Response(request, next_action, content_type="text/plain")
+    except Exception as e:
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/get-console", methods=["POST"])
+def get_console(request: Request):
+    """
+    Get new console output for monitoring.
+    
+    This route returns any new console messages and clears the buffer.
+    
+    :param Request request: The HTTP request object
+    :return: Console output messages
+    :rtype: Response
+    """
+    global console_buffer
+    try:
+        if console_buffer:
+            output = '\n'.join(console_buffer)
+            console_buffer = []  # Clear after sending
+            return Response(request, output, content_type="text/plain")
+        else:
+            return Response(request, "", content_type="text/plain")
+    except Exception as e:
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/create-file", methods=["POST"])
+def create_file(request: Request):
+    """
+    Handle file creation requests.
+    
+    This route creates a new empty file with the specified name on the
+    filesystem. It checks for existing files to prevent overwriting.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Success confirmation or error message
+    :rtype: Response
+    
+    Form Data Expected:
+        - filename: Name of the new file to create
+    """
+    try:
+        filename = request.form_data.get('filename', '')
+        
+        if not filename:
+            return Response(request, "No filename specified", content_type="text/plain")
+        
+        # Check if file already exists
+        try:
+            with open(filename, 'r'):
+                return Response(request, f"Error: File '{filename}' already exists", content_type="text/plain")
+        except OSError:
+            # File doesn't exist, create it
+            try:
+                with open(filename, 'w') as f:
+                    f.write('')  # Create empty file
+                return Response(request, f"File '{filename}' created successfully!", content_type="text/plain")
+            except OSError as e:
+                return Response(request, f"Error: Could not create file '{filename}' - {str(e)}", content_type="text/plain")
+                
+    except Exception as e:
+        print(f"Error in create_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/save-file", methods=["POST"])
+def save_file(request: Request):
+    """
+    Handle file saving requests from the editor.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Success confirmation or error message
+    :rtype: Response
+    """
+    try:
+        filename = request.form_data.get('filename', '')
+        content = request.form_data.get('content', '')
+        
+        if filename:
+            try:
+                with open(filename, 'w') as f:
+                    f.write(content)
+                return Response(request, f"File '{filename}' saved successfully!", content_type="text/plain")
+            except OSError as e:
+                return Response(request, f"Error: Could not save file '{filename}' - {str(e)}", content_type="text/plain")
+        else:
+            return Response(request, "No filename specified for saving", content_type="text/plain")
+    except Exception as e:
+        print(f"Error in save_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+@server.route("/delete-file", methods=["POST"])
+def delete_file(request: Request):
+    """
+    Handle file deletion requests.
+    
+    :param Request request: The HTTP request object containing form data
+    :return: Success confirmation or error message
+    :rtype: Response
+    """
+    try:
+        filename = request.form_data.get('filename', '')
+        
+        if not filename:
+            return Response(request, "No filename specified", content_type="text/plain")
+        
+        try:
+            os.remove(filename)
+            return Response(request, f"File '{filename}' deleted successfully!", content_type="text/plain")
+        except OSError as e:
+            return Response(request, f"Error: Could not delete file '{filename}' - {str(e)}", content_type="text/plain")
+            
+    except Exception as e:
+        print(f"Error in delete_file: {e}")
+        return Response(request, f"Error: {str(e)}", content_type="text/plain")
+
+# =============================================================================
+# SERVER STARTUP AND MAIN LOOP
+# =============================================================================
+
+# Start the server
+server.start("192.168.4.1", port=80)
+print("Picowide ready at http://192.168.4.1")
+console_print(f"Wi-Fi AP timeout set to {config.WIFI_AP_TIMEOUT_MINUTES} minutes ({WIFI_TIMEOUT_SECONDS} seconds).")
+
+
+# Main server loop
+while True:
+    """
+    Main server polling loop.
+    
+    This loop continuously polls the server for incoming requests and
+    handles them appropriately. It also updates the LED blinky state
+    on each iteration. Runs indefinitely until the device is reset
+    or powered off.
+    
+    Note:
+        This is a blocking loop that will consume the main thread.
+        Any additional background tasks should be integrated here
+        or handled via interrupts.
+    """
+    server.poll()
+    
+    # Update blinky LED state
+    update_blinky()
+    
+    # NEW: Check Wi-Fi timeout periodically and log progress
+    check_wifi_timeout()
+    
+    # NEW: Add a small delay and garbage collection for stability
+    time.sleep(0.1) # Prevents busy-waiting and allows some time for other tasks
+    gc.collect() # Periodically run garbage collection
