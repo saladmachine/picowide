@@ -52,6 +52,7 @@
         
         <button onclick="loadFileManager()">List Files</button>
         <button onclick="showCreateFile()">Create File</button>
+        <button id="startup-log-btn" onclick="toggleStartupLog()">View Startup Log</button>
         <button id="hotspot-btn" onclick="toggleHotspotControl()">Keep Hotspot Open</button> <div id="result"></div>
         
         <div id="create-file-section" style="display: none;">
@@ -85,6 +86,7 @@
             <button onclick="saveFile()">Save</button>
             <button onclick="closeEditor()">Close</button>
         </div>
+        <div id="startup-log-output" style="display: none;"></div> 
     </div>
 
     <div id="confirmModal" class="modal">
@@ -155,6 +157,29 @@
                 .catch(error => {
                     document.getElementById('result').textContent = 'Error: ' + error.message;
                 });
+        }
+
+        function toggleStartupLog() {
+            const logDiv = document.getElementById('startup-log-output');
+            const btn = document.getElementById('startup-log-btn');
+            
+            if (logDiv.style.display === 'none') {
+                fetch('/startup-log', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(result => {
+                        logDiv.innerHTML = '<pre>' + result + '</pre>';
+                        logDiv.style.display = 'block';
+                        btn.textContent = 'Hide Startup Log';
+                    })
+                    .catch(error => {
+                        logDiv.textContent = 'Error: ' + error.message;
+                        logDiv.style.display = 'block';
+                        btn.textContent = 'Hide Startup Log';
+                    });
+            } else {
+                logDiv.style.display = 'none';
+                btn.textContent = 'View Startup Log';
+            }
         }
 
         // NEW FUNCTION FOR HOTSPOT CONTROL
@@ -313,6 +338,8 @@
             formData.append('filename', filename);
             formData.append('content', content);
             
+            // FormData automatically uses multipart/form-data encoding
+            // which preserves special characters including quotes
             fetch('/save-file', { 
                 method: 'POST',
                 body: formData

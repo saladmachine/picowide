@@ -1,2 +1,4 @@
-# config.py
-WIFI_AP_TIMEOUT_MINUTES = 10 # Example: Wi-Fi AP will shut down after 10 minutes of inactivity
+WIFI_SSID = "TestTest"
+WIFI_PASSWORD = "testtest"
+WIFI_AP_TIMEOUT_MINUTES = 10
+BLINK_INTERVAL = 0.25

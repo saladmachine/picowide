@@ -17,7 +17,7 @@ Technical Implementation:
     - Access: Connect to "Picowide" WiFi → Navigate to 192.168.4.1
 
 Author: Picowide Project
-Version: 1.09 (Modified for FOSS release - with password)
+Version: 1.10 (Enhanced with input validation and error handling)
 License: MIT
 """
 
@@ -31,39 +31,109 @@ import time
 from adafruit_httpserver import Server, Request, Response
 import gc # Added for memory management
 
-# --- NEW: Config Import ---
-try:
-    import config
-except ImportError:
-    print("config.py not found. Using default values for power saving.")
-    class Config:
-        WIFI_AP_TIMEOUT_MINUTES = 10  # Default timeout in minutes if config.py is missing
-    config = Config()
-
 # =============================================================================
-# CORE SYSTEM SETUP
+# STARTUP LOGGING SYSTEM - Captures everything for standalone debugging
 # =============================================================================
 
-# Create WiFi hotspot with a password
-# For community release, this password should be clearly documented and/or changeable.
-# For security in deployment, use a strong, unique password.
-wifi.radio.start_ap(ssid="Picowide", password="simpletest")
-wifi.radio.set_ipv4_address_ap(
-    ipv4=ipaddress.IPv4Address("192.168.4.1"),
-    netmask=ipaddress.IPv4Address("255.255.255.0"),
-    gateway=ipaddress.IPv4Address("192.168.4.1")
-)
+startup_log = []
 
-# Initialize server
-pool = socketpool.SocketPool(wifi.radio)
-server = Server(pool, "/", debug=False)
+def startup_print(message):
+    """Log startup messages to both console and startup_log for later viewing"""
+    print(message)
+    startup_log.append(message)
 
-# --- NEW/MODIFIED: WiFi Timeout Variables and Activity Tracker ---
-last_activity_time = time.monotonic()
-WIFI_TIMEOUT_SECONDS = config.WIFI_AP_TIMEOUT_MINUTES * 60
-last_timeout_check_log_time = time.monotonic() # For periodic + logging
-ap_is_off_and_logged = False # NEW: Flag to prevent repeated shutdown messages after AP is off
-timeout_disabled = False # NEW: Flag to disable automatic timeout when user takes control
+def decode_html_entities(text):
+    """
+    Decode common HTML entities that may appear in web form submissions.
+    
+    :param str text: Text that may contain HTML entities
+    :return: Text with HTML entities decoded
+    :rtype: str
+    """
+    # Replace common HTML entities
+    text = text.replace('&quot;', '"')
+    text = text.replace('&amp;', '&')
+    text = text.replace('&lt;', '<')
+    text = text.replace('&gt;', '>')
+    text = text.replace('&#39;', "'")
+    return text
+
+def validate_wifi_password(password):
+    """
+    Validate WiFi password meets WPA2 requirements.
+    
+    :param str password: Password to validate
+    :return: Tuple of (is_valid, error_message)
+    :rtype: tuple[bool, str]
+    """
+    if not password:
+        return False, "WiFi password cannot be empty"
+    if len(password) < 8:
+        return False, "WiFi password must be at least 8 characters"
+    if len(password) > 64:
+        return False, "WiFi password cannot exceed 64 characters"
+    return True, ""
+
+def safe_start_access_point(ssid, password):
+    """
+    Safely start WiFi Access Point with validation and fallback.
+    
+    :param str ssid: Network name
+    :param str password: Network password
+    :return: Tuple of (success, actual_ssid, actual_password)
+    :rtype: tuple[bool, str, str]
+    """
+    # Validate password first
+    is_valid, error_msg = validate_wifi_password(password)
+    if not is_valid:
+        startup_print(f"Password validation failed: {error_msg}")
+        startup_print("Falling back to default credentials")
+        ssid = "Picowide"
+        password = "simpletest"
+    
+    try:
+        startup_print(f"Attempting to start AP with SSID: {ssid}")
+        wifi.radio.start_ap(ssid=ssid, password=password)
+        startup_print("AP started successfully")
+        return True, ssid, password
+    except Exception as e:
+        startup_print(f"AP start failed with user config: {e}")
+        startup_print("Attempting fallback to default credentials...")
+        
+        # Try with defaults
+        try:
+            default_ssid = "Picowide"
+            default_password = "simpletest"
+            wifi.radio.start_ap(ssid=default_ssid, password=default_password)
+            startup_print("AP started successfully with default credentials")
+            return False, default_ssid, default_password
+        except Exception as e2:
+            startup_print(f"AP start failed even with defaults: {e2}")
+            startup_print("This may be due to Pico W limitation - AP can only start once per reboot")
+            return False, ssid, password
+
+def safe_set_ipv4_address():
+    """
+    Safely configure IPv4 address with error handling.
+    
+    :return: Success status
+    :rtype: bool
+    """
+    try:
+        # Small delay to ensure AP interface is ready
+        time.sleep(0.5)
+        
+        wifi.radio.set_ipv4_address_ap(
+            ipv4=ipaddress.IPv4Address("192.168.4.1"),
+            netmask=ipaddress.IPv4Address("255.255.255.0"),
+            gateway=ipaddress.IPv4Address("192.168.4.1")
+        )
+        startup_print("IPv4 address configured successfully")
+        return True
+    except Exception as e:
+        startup_print(f"IPv4 address configuration failed: {e}")
+        startup_print("Network may still function with default addressing")
+        return False
 
 def shut_down_wifi_and_sleep(sleep_duration=None):
     """
@@ -88,6 +158,105 @@ def shut_down_wifi_and_sleep(sleep_duration=None):
     else:
         console_print("Wi-Fi shutdown complete. Other Pico operations continue. Requires physical power cycle to restart hotspot.")
 
+# --- BULLETPROOF: Config Import with guaranteed fallback ---
+# Initialize defaults first - ALWAYS have working config
+class Config:
+    WIFI_SSID = "Picowide"
+    WIFI_PASSWORD = "simpletest"
+    WIFI_AP_TIMEOUT_MINUTES = 10
+    BLINK_INTERVAL = 0.25
+
+config = Config()
+config_failed = False  # Track if config loading failed
+startup_print("Defaults loaded as fallback")
+
+# Try to import user config, but NEVER let it break the system
+try:
+    startup_print("Attempting to import config.py...")
+    import config as user_config
+    
+    # Test each attribute individually with fallback and HTML entity decoding
+    try:
+        ssid_value = str(user_config.WIFI_SSID)
+        # Decode HTML entities in case file was corrupted by web sources
+        ssid_value = decode_html_entities(ssid_value)
+        config.WIFI_SSID = ssid_value
+        startup_print(f"Using user SSID: {config.WIFI_SSID}")
+    except Exception as e:
+        startup_print(f"SSID error: {e} - using default SSID")
+        config_failed = True
+        
+    try:
+        password_value = str(user_config.WIFI_PASSWORD)
+        # Decode HTML entities in case file was corrupted by web sources
+        password_value = decode_html_entities(password_value)
+        config.WIFI_PASSWORD = password_value
+        startup_print(f"Using user password (decoded)")
+    except Exception as e:
+        startup_print(f"Password error: {e} - using default password")
+        config_failed = True
+        
+    try:
+        config.WIFI_AP_TIMEOUT_MINUTES = int(user_config.WIFI_AP_TIMEOUT_MINUTES)
+        startup_print(f"Using user timeout: {config.WIFI_AP_TIMEOUT_MINUTES}")
+    except Exception as e:
+        startup_print(f"Timeout error: {e} - using default timeout")
+        config_failed = True
+        
+    try:
+        config.BLINK_INTERVAL = float(user_config.BLINK_INTERVAL)
+        startup_print(f"Using user blink: {config.BLINK_INTERVAL}")
+    except Exception as e:
+        startup_print(f"Blink interval error: {e} - using default blink interval")
+        config_failed = True
+        
+except Exception as e:
+    startup_print(f"Config import completely failed: {e}")
+    startup_print("Using all defaults - system will continue normally")
+    config_failed = True
+
+# Set fast blink rate as error indicator if config failed
+if config_failed:
+    config.BLINK_INTERVAL = 0.10
+    startup_print("*** CONFIG ERRORS DETECTED ***")
+    startup_print("*** LED will blink rapidly as error indicator ***")
+    startup_print("*** Connect to default SSID 'Picowide' with password 'simpletest' ***")
+
+startup_print("Config initialization complete - system guaranteed to work")
+
+# =============================================================================
+# CORE SYSTEM SETUP
+# =============================================================================
+
+# Create WiFi hotspot with enhanced error handling
+startup_print("Initializing WiFi Access Point...")
+ap_success, actual_ssid, actual_password = safe_start_access_point(config.WIFI_SSID, config.WIFI_PASSWORD)
+
+# Update config with actual values used (in case of fallback)
+config.WIFI_SSID = actual_ssid
+config.WIFI_PASSWORD = actual_password
+
+# If AP start failed but we fell back to defaults, mark config as failed for error indication
+if not ap_success:
+    config_failed = True
+    config.BLINK_INTERVAL = 0.10
+    startup_print("*** AP START REQUIRED FALLBACK - RAPID BLINK ENABLED ***")
+
+# Configure IP address with error handling
+ipv4_success = safe_set_ipv4_address()
+if not ipv4_success:
+    startup_print("*** IPv4 configuration issues detected ***")
+
+# Initialize server
+pool = socketpool.SocketPool(wifi.radio)
+server = Server(pool, "/", debug=False)
+
+# --- NEW/MODIFIED: WiFi Timeout Variables and Activity Tracker ---
+last_activity_time = time.monotonic()
+WIFI_TIMEOUT_SECONDS = config.WIFI_AP_TIMEOUT_MINUTES * 60
+last_timeout_check_log_time = time.monotonic() # For periodic + logging
+ap_is_off_and_logged = False # NEW: Flag to prevent repeated shutdown messages after AP is off
+timeout_disabled = False # NEW: Flag to disable automatic timeout when user takes control
 
 def check_wifi_timeout():
     """
@@ -125,7 +294,6 @@ def check_wifi_timeout():
         console_print("Wi-Fi AP is currently off (and status not yet logged this cycle).")
         ap_is_off_and_logged = True
 
-
 # =============================================================================
 # BLINKY FUNCTIONALITY SECTION
 # =============================================================================
@@ -133,7 +301,7 @@ def check_wifi_timeout():
 # other projects. All LED blinky functionality is contained here.
 
 # Configurable blink interval (seconds)
-BLINK_INTERVAL = 0.25
+BLINK_INTERVAL = config.BLINK_INTERVAL
 
 # Setup LED
 led = digitalio.DigitalInOut(board.LED)
@@ -142,11 +310,17 @@ led.direction = digitalio.Direction.OUTPUT
 # Blink timing
 last_blink = time.monotonic()
 led_state = False
-blinky_enabled = False
 
 # Console monitoring
 monitor_enabled = False
 console_buffer = []
+
+# Auto-enable blinky if config failed (error indicator)
+if config_failed:
+    blinky_enabled = True
+    print("*** RAPID BLINKING ENABLED - CONFIG ERROR INDICATOR ***")
+else:
+    blinky_enabled = False
 
 def console_print(message):
     """
@@ -548,6 +722,9 @@ def save_file(request: Request):
         filename = request.form_data.get('filename', '')
         content = request.form_data.get('content', '')
         
+        # Decode HTML entities before saving (fixes web interface quote corruption)
+        content = decode_html_entities(content)
+        
         if filename:
             try:
                 with open(filename, 'w') as f:
@@ -586,15 +763,51 @@ def delete_file(request: Request):
         print(f"Error in delete_file: {e}")
         return Response(request, f"Error: {str(e)}", content_type="text/plain")
 
+@server.route("/startup-log", methods=["POST"])
+def get_startup_log(request: Request):
+    """
+    Return the startup log for debugging standalone issues.
+    
+    :param Request request: The HTTP request object
+    :return: Startup log messages
+    :rtype: Response
+    """
+    try:
+        if startup_log:
+            log_output = '\n'.join(startup_log)
+            return Response(request, f"STARTUP LOG:\n\n{log_output}", content_type="text/plain")
+        else:
+            return Response(request, "No startup log available", content_type="text/plain")
+    except Exception as e:
+        return Response(request, f"Error retrieving startup log: {str(e)}", content_type="text/plain")
+
+# Add startup log route for easy debugging
+@server.route("/startup-log", methods=["POST"])
+def get_startup_log(request: Request):
+    """
+    Return the startup log for debugging standalone issues.
+    
+    :param Request request: The HTTP request object
+    :return: Startup log messages
+    :rtype: Response
+    """
+    try:
+        if startup_log:
+            log_output = '\n'.join(startup_log)
+            return Response(request, f"STARTUP LOG:\n\n{log_output}", content_type="text/plain")
+        else:
+            return Response(request, "No startup log available", content_type="text/plain")
+    except Exception as e:
+        return Response(request, f"Error retrieving startup log: {str(e)}", content_type="text/plain")
+
 # =============================================================================
 # SERVER STARTUP AND MAIN LOOP
 # =============================================================================
 
 # Start the server
 server.start("192.168.4.1", port=80)
-print("Picowide ready at http://192.168.4.1")
+startup_print("Picowide ready at http://192.168.4.1")
 console_print(f"Wi-Fi AP timeout set to {config.WIFI_AP_TIMEOUT_MINUTES} minutes ({WIFI_TIMEOUT_SECONDS} seconds).")
-
 
 # Main server loop
 while True:
