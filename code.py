@@ -65,18 +65,6 @@ last_timeout_check_log_time = time.monotonic() # For periodic + logging
 ap_is_off_and_logged = False # NEW: Flag to prevent repeated shutdown messages after AP is off
 timeout_disabled = False # NEW: Flag to disable automatic timeout when user takes control
 
-def update_activity_time():
-   """
-   Updates the global timestamp for the last detected user activity.
-   Called by every web server route to reset the Wi-Fi timeout.
-   """
-   global last_activity_time, ap_is_off_and_logged
-   # Only reset if Wi-Fi is still active. Avoid logging if already shut down.
-   if wifi.radio.enabled:
-       last_activity_time = time.monotonic()
-       ap_is_off_and_logged = False # Reset flag when activity detected and AP is on (i.e., AP is now working)
-       # console_print(f"Activity detected, timer reset. (Elapsed: {round(time.monotonic() - last_activity_time, 1)}s / Timeout: {WIFI_TIMEOUT_SECONDS}s)")
-
 def shut_down_wifi_and_sleep(sleep_duration=None):
     """
     Shuts down the Wi-Fi Access Point and optionally puts the board to sleep.
@@ -226,7 +214,6 @@ def serve_index(request: Request):
     :return: HTML response containing the web interface
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on every page load
     with open("index.html", "r") as f:
         return Response(request, f.read(), content_type="text/html")
 
@@ -239,7 +226,6 @@ def serve_styles(request: Request):
     :return: CSS response containing styling information
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity when serving CSS
     with open("styles.css", "r") as f:
         return Response(request, f.read(), content_type="text/css")
 
@@ -255,7 +241,6 @@ Commented out test button code here and in index.html
 #   :return: Plain text response confirming functionality
 #   :rtype: Response
 #   """
-#   update_activity_time() # NEW: Update activity on test button press
 #   return Response(request, "Button works!", content_type="text/plain")
 
 @server.route("/run-blinky", methods=["POST"])
@@ -270,7 +255,6 @@ def run_blinky(request: Request):
     :return: Next button action text ("Blinky On" or "Blinky Off")
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on blinky toggle
     global blinky_enabled
     try:
         blinky_enabled = not blinky_enabled
@@ -289,7 +273,6 @@ def toggle_hotspot_control(request: Request):
    When timeout is enabled, disables timeout and keeps hotspot open.
    """
    global timeout_disabled, ap_is_off_and_logged
-   update_activity_time() # Update activity on hotspot control toggle
    
    if not timeout_disabled:
        # User wants to keep hotspot open (disable timeout)
@@ -302,6 +285,7 @@ def toggle_hotspot_control(request: Request):
        shut_down_wifi_and_sleep()
        ap_is_off_and_logged = True
        return Response(request, "Hotspot closed. Physical power cycle needed to restart.", content_type="text/plain")
+
 # --- LEGACY: Power Save Route (kept for compatibility) ---
 @server.route("/power-save", methods=["POST"])
 def power_save_mode(request: Request):
@@ -311,7 +295,6 @@ def power_save_mode(request: Request):
     Requires a physical power cycle to restart the hotspot.
     """
     global ap_is_off_and_logged
-    # No need to update activity time here, as we are intentionally shutting down.
     if not ap_is_off_and_logged: # Only log manual shutdown once
         console_print("Received request to enter power-save mode.")
         shut_down_wifi_and_sleep()
@@ -391,7 +374,6 @@ def list_files(request: Request):
         filename2.html
         filename3.css
     """
-    update_activity_time() # NEW: Update activity on file list request
     print("Handling list files request")
     all_files = list_all_files()
     
@@ -419,7 +401,6 @@ def select_file(request: Request):
     Form Data Expected:
         - filename: Name of the selected file
     """
-    update_activity_time() # NEW: Update activity on file selection
     try:
         # Get the filename from form data
         filename = request.form_data.get('filename', '')
@@ -452,7 +433,6 @@ def open_file(request: Request):
         
         [file contents here]
     """
-    update_activity_time() # NEW: Update activity on file open
     try:
         # Get the filename from form data
         filename = request.form_data.get('filename', '')
@@ -482,7 +462,6 @@ def run_monitor(request: Request):
     :return: Next button action text ("Monitor On" or "Monitor Off")
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on monitor toggle
     global monitor_enabled
     try:
         monitor_enabled = not monitor_enabled
@@ -507,7 +486,6 @@ def get_console(request: Request):
     :return: Console output messages
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on console fetch
     global console_buffer
     try:
         if console_buffer:
@@ -534,7 +512,6 @@ def create_file(request: Request):
     Form Data Expected:
         - filename: Name of the new file to create
     """
-    update_activity_time() # NEW: Update activity on file creation
     try:
         filename = request.form_data.get('filename', '')
         
@@ -567,7 +544,6 @@ def save_file(request: Request):
     :return: Success confirmation or error message
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on file save
     try:
         filename = request.form_data.get('filename', '')
         content = request.form_data.get('content', '')
@@ -594,7 +570,6 @@ def delete_file(request: Request):
     :return: Success confirmation or error message
     :rtype: Response
     """
-    update_activity_time() # NEW: Update activity on file delete
     try:
         filename = request.form_data.get('filename', '')
         
