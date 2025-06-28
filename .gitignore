@@ -1,0 +1,15 @@
+# Python environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Sphinx build output
+docs/_build/
+.vscode/
+
+# Specific files we don't want
+code_tmp.py
+
+# Thonny cache
+*.thny

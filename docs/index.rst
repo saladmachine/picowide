@@ -46,6 +46,7 @@ Perfect For
    architecture
    api-endpoints
    source-code
+   api
 
 What Makes Picowide Special?
 ----------------------------
